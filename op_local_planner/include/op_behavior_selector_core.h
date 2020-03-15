@@ -38,6 +38,7 @@
 #include <nav_msgs/Odometry.h>
 #include <autoware_msgs/LaneArray.h>
 #include <std_msgs/Int32.h>
+#include <std_msgs/Float32.h>
 #include <geometry_msgs/TwistWithCovarianceStamped.h>
 #include <autoware_can_msgs/CANInfo.h>
 #include <autoware_msgs/DetectedObjectArray.h>
@@ -93,13 +94,15 @@ protected: //Planning Related variables
   	autoware_msgs::Lane m_CurrentTrajectoryToSend;
   	bool bNewLightStatus;
 	bool bNewLightSignal;
-	PlannerHNS::TrafficLightState  m_CurrLightStatus;
+	PlannerHNS::TRAFFIC_LIGHT_TYPE  m_CurrLightStatus;
 	std::vector<PlannerHNS::TrafficLight> m_CurrTrafficLight;
 	std::vector<PlannerHNS::TrafficLight> m_PrevTrafficLight;
 
 	geometry_msgs::TwistStamped m_Twist_raw;
 	geometry_msgs::TwistStamped m_Twist_cmd;
 	autoware_msgs::ControlCommand m_Ctrl_cmd;
+
+	std::string m_ExperimentFolderName;
 
 	//ROS messages (topics)
 	ros::NodeHandle nh;
@@ -111,6 +114,8 @@ protected: //Planning Related variables
 	ros::Publisher pub_BehaviorState;
 	ros::Publisher pub_SimuBoxPose;
 	ros::Publisher pub_SelectedPathRviz;
+	ros::Publisher pub_TargetSpeedRviz;
+	ros::Publisher pub_ActualSpeedRviz;
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;

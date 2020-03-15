@@ -37,6 +37,7 @@ TrajectoryGen::TrajectoryGen()
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
 
+	pub_PathsRviz = nh.advertise<visualization_msgs::MarkerArray>("global_waypoints_rviz", 1, true);
 	pub_LocalTrajectories = nh.advertise<autoware_msgs::LaneArray>("local_trajectories", 1);
 	pub_LocalTrajectoriesRviz = nh.advertise<visualization_msgs::MarkerArray>("local_trajectories_gen_rviz", 1);
 
@@ -44,15 +45,20 @@ TrajectoryGen::TrajectoryGen()
 	sub_current_pose = nh.subscribe("/current_pose", 10, &TrajectoryGen::callbackGetCurrentPose, this);
 
 	int bVelSource = 1;
-	_nh.getParam("/op_trajectory_generator/velocitySource", bVelSource);
+	_nh.getParam("/op_common_params/velocitySource", bVelSource);
 	if(bVelSource == 0)
-		sub_robot_odom = nh.subscribe("/odom", 10,	&TrajectoryGen::callbackGetRobotOdom, this);
+		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 11,	&TrajectoryGen::callbackGetRobotOdom, this);
 	else if(bVelSource == 1)
-		sub_current_velocity = nh.subscribe("/current_velocity", 10, &TrajectoryGen::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 11, &TrajectoryGen::callbackGetVehicleStatus, this);
 	else if(bVelSource == 2)
-		sub_can_info = nh.subscribe("/can_info", 10, &TrajectoryGen::callbackGetCANInfo, this);
+		sub_can_info = nh.subscribe("/can_info", 11, &TrajectoryGen::callbackGetCANInfo, this);
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryGen::callbackGetGlobalPlannerPath, this);
+
+	UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
+	m_distance_moved_since_stuck = 0;
+	m_distance_moved = 0;
+	m_bStuckState = false;
 }
 
 TrajectoryGen::~TrajectoryGen()
@@ -81,10 +87,13 @@ void TrajectoryGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	_nh.getParam("/op_common_params/pathDensity", m_PlanningParams.pathDensity);
 	_nh.getParam("/op_common_params/rollOutDensity", m_PlanningParams.rollOutDensity);
-	if(m_PlanningParams.enableSwerving)
-		_nh.getParam("/op_common_params/rollOutsNumber", m_PlanningParams.rollOutNumber);
-	else
+	_nh.getParam("/op_common_params/rollOutsNumber", m_PlanningParams.rollOutNumber);
+	m_nOriginalRollOuts = m_PlanningParams.rollOutNumber;
+
+	if(!m_PlanningParams.enableSwerving)
+	{
 		m_PlanningParams.rollOutNumber = 0;
+	}
 
 	_nh.getParam("/op_common_params/horizonDistance", m_PlanningParams.horizonDistance);
 	_nh.getParam("/op_common_params/minFollowingDistance", m_PlanningParams.minFollowingDistance);
@@ -128,10 +137,50 @@ void TrajectoryGen::callbackGetInitPose(const geometry_msgs::PoseWithCovarianceS
 
 void TrajectoryGen::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
 {
-	m_CurrentPos = PlannerHNS::WayPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
+	PlannerHNS::GPSPoint prev_pos = m_CurrentPos.pos;
+	m_CurrentPos.pos = PlannerHNS::GPSPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
 	m_InitPos = m_CurrentPos;
 	bNewCurrentPos = true;
 	bInitPos = true;
+
+	//just For CARLA 
+	if(m_PlanningParams.enableTimeOutAvoidance)
+	{
+		if(m_bStuckState)
+		{
+			m_distance_moved_since_stuck += hypot(prev_pos.y-m_CurrentPos.pos.y, prev_pos.x-m_CurrentPos.pos.x);;
+			if(m_distance_moved_since_stuck > m_PlanningParams.microPlanDistance)
+			{
+				UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
+				m_distance_moved_since_stuck = 0;
+				m_distance_moved = 0;
+				m_bStuckState = false;
+				m_PlanningParams.enableSwerving = false;
+				m_PlanningParams.rollOutNumber = 0;
+			}
+		}
+		else
+		{
+			if(m_VehicleStatus.speed < 0.1) //start monitor stuck
+			{
+				m_distance_moved += hypot(prev_pos.y-m_CurrentPos.pos.y, prev_pos.x-m_CurrentPos.pos.x);
+
+				double time_since_stop = UtilityHNS::UtilityH::GetTimeDiffNow(m_PlanningTimer);
+				if(m_distance_moved < m_DistanceLimitInTimeOut && time_since_stop  > m_PlanningParams.avoidanceTimeOut)
+				{
+					m_bStuckState = true;
+					m_distance_moved_since_stuck = 0;
+					m_PlanningParams.enableSwerving = true;
+					m_PlanningParams.rollOutNumber = m_nOriginalRollOuts;
+				}
+			}
+			else //vehicle is moving , nothing to worry about
+			{
+				UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
+				m_distance_moved = 0;
+			}
+		}
+	}
 }
 
 void TrajectoryGen::callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg)
@@ -155,7 +204,9 @@ void TrajectoryGen::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr 
 void TrajectoryGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 {
 	m_VehicleStatus.speed = msg->twist.twist.linear.x;
-	m_VehicleStatus.steer += atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
+
+	if(msg->twist.twist.linear.x != 0)
+		m_VehicleStatus.steer += atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }
@@ -172,7 +223,6 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 		{
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), m_temp_path);
 
-			PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
 			m_GlobalPaths.push_back(m_temp_path);
 
 			if(bOldGlobalPath)
@@ -184,18 +234,49 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 		if(!bOldGlobalPath)
 		{
 			bWayGlobalPath = true;
+			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+			{
+				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
+				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+				m_prev_index.push_back(0);
+			}
+
 			std::cout << "Received New Global Path Generator ! " << std::endl;
 		}
 		else
 		{
 			m_GlobalPaths.clear();
 		}
+
+		autoware_msgs::LaneArray lane_array;
+		visualization_msgs::MarkerArray pathsToVisualize;
+
+		for(unsigned int i=0; i < m_GlobalPaths.size(); i++)
+		{
+			autoware_msgs::Lane lane;
+			PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_GlobalPaths.at(i), lane);
+			lane_array.lanes.push_back(lane);
+		}
+
+		std_msgs::ColorRGBA total_color;
+		total_color.r = 0;
+		total_color.g = 0.7;
+		total_color.b = 1.0;
+		total_color.a = 0.6;
+		PlannerHNS::ROSHelpers::createGlobalLaneArrayMarker(total_color, lane_array, pathsToVisualize);
+		PlannerHNS::ROSHelpers::createGlobalLaneArrayOrientationMarker(lane_array, pathsToVisualize);
+		PlannerHNS::ROSHelpers::createGlobalLaneArrayVelocityMarker(lane_array, pathsToVisualize);
+		pub_PathsRviz.publish(pathsToVisualize);
 	}
 }
 
 void TrajectoryGen::MainLoop()
 {
-	ros::Rate loop_rate(100);
+	ros::Rate loop_rate(50);
 
 	PlannerHNS::WayPoint prevState, state_change;
 
@@ -210,8 +291,11 @@ void TrajectoryGen::MainLoop()
 			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
 			{
 				t_centerTrajectorySmoothed.clear();
-				PlannerHNS::PlanningHelpers::ExtractPartFromPointToDistanceDirectionFast(m_GlobalPaths.at(i), m_CurrentPos, m_PlanningParams.horizonDistance ,
-						m_PlanningParams.pathDensity ,t_centerTrajectorySmoothed);
+
+				m_prev_index.at(i) = PlannerHNS::PlanningHelpers::ExtractPartFromPointToDistanceDirectionFast(m_GlobalPaths.at(i), m_CurrentPos, m_PlanningParams.horizonDistance ,
+						m_PlanningParams.pathDensity ,t_centerTrajectorySmoothed, m_prev_index.at(i));
+
+				if(m_prev_index.at(i) > 0 ) m_prev_index.at(i) = m_prev_index.at(i) -1;
 
 				m_GlobalPathSections.push_back(t_centerTrajectorySmoothed);
 			}
