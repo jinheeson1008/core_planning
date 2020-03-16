@@ -23,6 +23,7 @@
 #include <pcl_ros/transforms.h>
 #include "op_ros_helpers/PolygonGenerator.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
+#include "op_planner/KmlMapLoader.h"
 
 
 namespace CarSimulatorNS
@@ -784,7 +785,8 @@ void OpenPlannerCarSimulator::MainLoop()
 		if(m_SimParams.mapSource == MAP_KML_FILE && !m_bMap)
 		{
 			m_bMap = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_SimParams.KmlMapPath, m_Map);
 			InitializeSimuCar(m_SimParams.startPose);
 		}
 		else if (m_SimParams.mapSource == MAP_FOLDER && !m_bMap)

@@ -36,6 +36,7 @@
 #include <pcl/point_types.h>
 #include "op_utility/UtilityH.h"
 #include "op_planner/MatrixOperations.h"
+#include "op_planner/KmlMapLoader.h"
 
 namespace PlannerXNS
 {
@@ -610,7 +611,8 @@ void PlannerX::PlannerMainLoop()
 		if(m_MapSource == MAP_KML_FILE && !bKmlMapLoaded)
 		{
 			bKmlMapLoaded = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_KmlMapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_KmlMapPath, m_Map);
 		}
 		else if(m_MapSource == MAP_FOLDER && !bKmlMapLoaded)
 		{

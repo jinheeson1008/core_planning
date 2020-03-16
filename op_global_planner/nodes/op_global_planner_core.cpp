@@ -16,6 +16,7 @@
 
 #include "op_global_planner_core.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
+#include "op_planner/KmlMapLoader.h"
 
 namespace GlobalPlanningNS
 {
@@ -436,7 +437,8 @@ void GlobalPlanner::MainLoop()
 		if(m_params.mapSource == PlannerHNS::MAP_KML_FILE && !m_bKmlMap)
 		{
 			m_bKmlMap = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_params.KmlMapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_params.KmlMapPath, m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
 			pub_MapRviz.publish(map_marker_array);

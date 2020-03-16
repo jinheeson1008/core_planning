@@ -19,7 +19,7 @@
 #include "math.h"
 #include "op_planner/MatrixOperations.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
-
+#include "op_planner/KmlMapLoader.h"
 
 namespace SignsSimulatorNS
 {
@@ -148,7 +148,8 @@ void OpenPlannerSimulatorSigns::MainLoop()
 		if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
 		{
 			bMap = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_MapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_MapPath, m_Map);
 		}
 		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
 		{

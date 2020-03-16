@@ -15,6 +15,7 @@
  */
 
 #include "way_planner_core.h"
+#include "op_planner/KmlMapLoader.h"
 
 namespace WayPlannerNS {
 
@@ -668,7 +669,8 @@ void way_planner_core::PlannerMainLoop()
 		if(m_params.mapSource == MAP_KML_FILE && !m_bKmlMap)
 		{
 			m_bKmlMap = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_params.KmlMapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_params.KmlMapPath, m_Map);
 			//PlannerHNS::MappingHelpers::WriteKML("/home/hatem/SimuLogs/KmlMaps/ToyotaMap2017.kml", "/home/hatem/SimuLogs/KmlMaps/PlannerX_MapTemplate.kml", m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
