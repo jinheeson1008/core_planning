@@ -23,6 +23,7 @@
 #include <pcl_ros/transforms.h>
 #include "op_ros_helpers/PolygonGenerator.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
+#include "op_planner/KmlMapLoader.h"
 
 
 namespace CarSimulatorNS
@@ -502,9 +503,9 @@ void OpenPlannerCarSimulator::callbackGetTrafficLightSignals(const autoware_msgs
 //		PlannerHNS::TrafficLight tl;
 //		tl.id = msg.Signals.at(i).signalId;
 //		if(msg.Signals.at(i).type == 1)
-//			tl.lightState = PlannerHNS::GREEN_LIGHT;
+//			tl.lightType = PlannerHNS::GREEN_LIGHT;
 //		else
-//			tl.lightState = PlannerHNS::RED_LIGHT;
+//			tl.lightType = PlannerHNS::RED_LIGHT;
 //
 //		m_CurrTrafficLight.push_back(tl);
 //	}
@@ -520,18 +521,18 @@ void OpenPlannerCarSimulator::callbackGetTrafficLightSignals(const autoware_msgs
 		{
 			if(m_Map.trafficLights.at(k).id == tl.id)
 			{
-				tl.pos = m_Map.trafficLights.at(k).pos;
+				tl.pose = m_Map.trafficLights.at(k).pose;
 				break;
 			}
 		}
 
 		if(msg.Signals.at(i).type == 1)
 		{
-			tl.lightState = PlannerHNS::GREEN_LIGHT;
+			tl.lightType = PlannerHNS::GREEN_LIGHT;
 		}
 		else
 		{
-			tl.lightState = PlannerHNS::RED_LIGHT;
+			tl.lightType = PlannerHNS::RED_LIGHT;
 		}
 
 		simulatedLights.push_back(tl);
@@ -784,7 +785,8 @@ void OpenPlannerCarSimulator::MainLoop()
 		if(m_SimParams.mapSource == MAP_KML_FILE && !m_bMap)
 		{
 			m_bMap = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_SimParams.KmlMapPath, m_Map);
 			InitializeSimuCar(m_SimParams.startPose);
 		}
 		else if (m_SimParams.mapSource == MAP_FOLDER && !m_bMap)
@@ -804,7 +806,7 @@ void OpenPlannerCarSimulator::MainLoop()
 						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
 						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
 						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
-						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, PlannerHNS::GPSPoint(), m_Map, true);
+						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true);
 
 				if(m_Map.roadSegments.size() > 0)
 				{
@@ -819,7 +821,7 @@ void OpenPlannerCarSimulator::MainLoop()
 						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
 						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
 						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,  PlannerHNS::GPSPoint(), m_Map, true);
+						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr, PlannerHNS::GPSPoint(), m_Map, true);
 
 				if(m_Map.roadSegments.size() > 0)
 				{

@@ -17,6 +17,7 @@
 #include "op_behavior_selector_core.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
 #include "op_planner/MappingHelpers.h"
+#include "op_planner/KmlMapLoader.h"
 
 namespace BehaviorGeneratorNS
 {
@@ -49,17 +50,19 @@ BehaviorGen::BehaviorGen()
 	pub_SimuBoxPose	  = nh.advertise<geometry_msgs::PoseArray>("sim_box_pose_ego", 1);
 	pub_BehaviorStateRviz = nh.advertise<visualization_msgs::MarkerArray>("behavior_state", 1);
 	pub_SelectedPathRviz = nh.advertise<visualization_msgs::MarkerArray>("local_selected_trajectory_rviz", 1);
+	pub_TargetSpeedRviz = nh.advertise<std_msgs::Float32>("op_target_velocity_rviz", 1);
+	pub_ActualSpeedRviz = nh.advertise<std_msgs::Float32>("op_actual_velocity_rviz", 1);
 
-	sub_current_pose = nh.subscribe("/current_pose", 10,	&BehaviorGen::callbackGetCurrentPose, this);
+	sub_current_pose = nh.subscribe("/current_pose", 1,	&BehaviorGen::callbackGetCurrentPose, this);
 
 	int bVelSource = 1;
-	_nh.getParam("/op_trajectory_evaluator/velocitySource", bVelSource);
+	_nh.getParam("/op_common_params/velocitySource", bVelSource);
 	if(bVelSource == 0)
-		sub_robot_odom = nh.subscribe("/odom", 10, &BehaviorGen::callbackGetRobotOdom, this);
+		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 1, &BehaviorGen::callbackGetRobotOdom, this);
 	else if(bVelSource == 1)
-		sub_current_velocity = nh.subscribe("/current_velocity", 10, &BehaviorGen::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &BehaviorGen::callbackGetVehicleStatus, this);
 	else if(bVelSource == 2)
-		sub_can_info = nh.subscribe("/can_info", 10, &BehaviorGen::callbackGetCANInfo, this);
+		sub_can_info = nh.subscribe("/can_info", 1, &BehaviorGen::callbackGetCANInfo, this);
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &BehaviorGen::callbackGetGlobalPlannerPath, this);
 	sub_LocalPlannerPaths = nh.subscribe("/local_weighted_trajectories", 1, &BehaviorGen::callbackGetLocalPlannerPath, this);
@@ -72,25 +75,34 @@ BehaviorGen::BehaviorGen()
 	//sub_ctrl_cmd = nh.subscribe("/ctrl_cmd", 1, &BehaviorGen::callbackGetCommandCMD, this);
 
 	//Mapping Section
-	sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &BehaviorGen::callbackGetVMLanes,  this);
-	sub_points = nh.subscribe("/vector_map_info/point", 1, &BehaviorGen::callbackGetVMPoints,  this);
-	sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &BehaviorGen::callbackGetVMdtLanes,  this);
-	sub_intersect = nh.subscribe("/vector_map_info/cross_road", 1, &BehaviorGen::callbackGetVMIntersections,  this);
-	sup_area = nh.subscribe("/vector_map_info/area", 1, &BehaviorGen::callbackGetVMAreas,  this);
-	sub_lines = nh.subscribe("/vector_map_info/line", 1, &BehaviorGen::callbackGetVMLines,  this);
-	sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &BehaviorGen::callbackGetVMStopLines,  this);
-	sub_signals = nh.subscribe("/vector_map_info/signal", 1, &BehaviorGen::callbackGetVMSignal,  this);
-	sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &BehaviorGen::callbackGetVMVectors,  this);
-	sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &BehaviorGen::callbackGetVMCurbs,  this);
-	sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &BehaviorGen::callbackGetVMRoadEdges,  this);
-	sub_way_areas = nh.subscribe("/vector_map_info/way_area", 1, &BehaviorGen::callbackGetVMWayAreas,  this);
-	sub_cross_walk = nh.subscribe("/vector_map_info/cross_walk", 1, &BehaviorGen::callbackGetVMCrossWalks,  this);
-	sub_nodes = nh.subscribe("/vector_map_info/node", 1, &BehaviorGen::callbackGetVMNodes,  this);
+	if(m_MapType == PlannerHNS::MAP_AUTOWARE)
+	{
+		sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &BehaviorGen::callbackGetVMLanes,  this);
+		sub_points = nh.subscribe("/vector_map_info/point", 1, &BehaviorGen::callbackGetVMPoints,  this);
+		sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &BehaviorGen::callbackGetVMdtLanes,  this);
+		sub_intersect = nh.subscribe("/vector_map_info/cross_road", 1, &BehaviorGen::callbackGetVMIntersections,  this);
+		sup_area = nh.subscribe("/vector_map_info/area", 1, &BehaviorGen::callbackGetVMAreas,  this);
+		sub_lines = nh.subscribe("/vector_map_info/line", 1, &BehaviorGen::callbackGetVMLines,  this);
+		sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &BehaviorGen::callbackGetVMStopLines,  this);
+		sub_signals = nh.subscribe("/vector_map_info/signal", 1, &BehaviorGen::callbackGetVMSignal,  this);
+		sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &BehaviorGen::callbackGetVMVectors,  this);
+		sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &BehaviorGen::callbackGetVMCurbs,  this);
+		sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &BehaviorGen::callbackGetVMRoadEdges,  this);
+		sub_way_areas = nh.subscribe("/vector_map_info/way_area", 1, &BehaviorGen::callbackGetVMWayAreas,  this);
+		sub_cross_walk = nh.subscribe("/vector_map_info/cross_walk", 1, &BehaviorGen::callbackGetVMCrossWalks,  this);
+		sub_nodes = nh.subscribe("/vector_map_info/node", 1, &BehaviorGen::callbackGetVMNodes,  this);
+	}
 }
 
 BehaviorGen::~BehaviorGen()
 {
-	UtilityHNS::DataRW::WriteLogData(UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+UtilityHNS::DataRW::StatesLogFolderName, "MainLog",
+	std::ostringstream fileName;
+	if(m_ExperimentFolderName.size() == 0)
+		fileName << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::StatesLogFolderName;
+	else
+		fileName << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentFolderName + UtilityHNS::DataRW::StatesLogFolderName;
+
+	UtilityHNS::DataRW::WriteLogData(fileName.str(), "MainLog",
 				"time,dt, Behavior_i, Behavior_str, RollOuts_n, Blocked_i, Central_i, Selected_i, StopSign_id, Light_id, Stop_Dist, Follow_Dist, Follow_Vel,"
 				"Target_Vel, PID_Vel, T_cmd_Vel, C_cmd_Vel, Vel, Steer, X, Y, Z, Theta,"
 				, m_LogData);
@@ -125,8 +137,8 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/maxDistanceToAvoid", m_PlanningParams.maxDistanceToAvoid);
 	_nh.getParam("/op_common_params/speedProfileFactor", m_PlanningParams.speedProfileFactor);
 
-	_nh.getParam("/op_trajectory_evaluator/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
-	_nh.getParam("/op_trajectory_evaluator/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
+	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
+	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
 
 	_nh.getParam("/op_common_params/enableLaneChange", m_PlanningParams.enableLaneChange);
 
@@ -158,8 +170,18 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 		m_MapType = PlannerHNS::MAP_KML_FILE;
 
 	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
+	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
+	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
 
-	_nh.getParam("/op_behavior_selector/evidence_tust_number", m_PlanningParams.nReliableCount);
+	if(m_ExperimentFolderName.size() > 0)
+	{
+		if(m_ExperimentFolderName.at(m_ExperimentFolderName.size()-1) != '/')
+			m_ExperimentFolderName.push_back('/');
+	}
+
+	UtilityHNS::DataRW::CreateLoggingMainFolder();
+	if(m_ExperimentFolderName.size() > 1)
+		UtilityHNS::DataRW::CreateExperimentFolder(m_ExperimentFolderName);
 
 	//std::cout << "nReliableCount: " << m_PlanningParams.nReliableCount << std::endl;
 
@@ -185,7 +207,7 @@ void BehaviorGen::callbackGetCommandCMD(const autoware_msgs::ControlCommandConst
 
 void BehaviorGen::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
 {
-	m_CurrentPos = PlannerHNS::WayPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
+	m_CurrentPos.pos = PlannerHNS::GPSPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
 	bNewCurrentPos = true;
 }
 
@@ -193,8 +215,9 @@ void BehaviorGen::callbackGetVehicleStatus(const geometry_msgs::TwistStampedCons
 {
 	m_VehicleStatus.speed = msg->twist.linear.x;
 	m_CurrentPos.v = m_VehicleStatus.speed;
-	if(fabs(msg->twist.linear.x) > 0.25)
-		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/msg->twist.linear.x);
+
+	if(fabs(m_CurrentPos.v) > 0.1)
+		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/m_CurrentPos.v);
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }
@@ -220,49 +243,49 @@ void BehaviorGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 
 void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
-	if(msg->lanes.size() > 0 && bMap)
+	if(msg->lanes.size() > 0)
 	{
-
 		bool bOldGlobalPath = m_GlobalPaths.size() == msg->lanes.size();
-
 		m_GlobalPaths.clear();
 
 		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
 		{
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), m_temp_path);
-			PlannerHNS::Lane* pPrevValid = 0;
-			for(unsigned int j = 0 ; j < m_temp_path.size(); j++)
+
+			if(bMap)
 			{
-				PlannerHNS::Lane* pLane = 0;
-				pLane = PlannerHNS::MappingHelpers::GetLaneById(m_temp_path.at(j).laneId, m_Map);
-				if(!pLane)
+				PlannerHNS::Lane* pPrevValid = 0;
+				for(unsigned int j = 0 ; j < m_temp_path.size(); j++)
 				{
-					pLane = PlannerHNS::MappingHelpers::GetClosestLaneFromMapDirectionBased(m_temp_path.at(j), m_Map, 1);
-
-					if(!pLane && !pPrevValid)
-					{
-						ROS_ERROR("Map inconsistency between Global Path and Local Planer Map, Can't identify current lane.");
-						return;
-					}
-
+					PlannerHNS::Lane* pLane = 0;
+					pLane = PlannerHNS::MappingHelpers::GetLaneById(m_temp_path.at(j).laneId, m_Map);
 					if(!pLane)
-						m_temp_path.at(j).pLane = pPrevValid;
-					else
 					{
-						m_temp_path.at(j).pLane = pLane;
-						pPrevValid = pLane ;
+						pLane = PlannerHNS::MappingHelpers::GetClosestLaneFromMap(m_temp_path.at(j), m_Map, 1, true);
+
+						if(!pLane && !pPrevValid)
+						{
+							ROS_ERROR("Map inconsistency between Global Path and Local Planer Map, Can't identify current lane.");
+							return;
+						}
+
+						if(!pLane)
+							m_temp_path.at(j).pLane = pPrevValid;
+						else
+						{
+							m_temp_path.at(j).pLane = pLane;
+							pPrevValid = pLane ;
+						}
+
+						m_temp_path.at(j).laneId = m_temp_path.at(j).pLane->id;
 					}
+					else
+						m_temp_path.at(j).pLane = pLane;
 
-					m_temp_path.at(j).laneId = m_temp_path.at(j).pLane->id;
+					//std::cout << "StopLineInGlobalPath: " << m_temp_path.at(j).stopLineID << std::endl;
 				}
-				else
-					m_temp_path.at(j).pLane = pLane;
-
-
-				//std::cout << "StopLineInGlobalPath: " << m_temp_path.at(j).stopLineID << std::endl;
 			}
 
-			PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
 			m_GlobalPaths.push_back(m_temp_path);
 
 			if(bOldGlobalPath)
@@ -278,10 +301,23 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
 			{
 				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
+				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
 				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.35, 0.4, 0.05);
-
 				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
-				m_GlobalPaths.at(i).at(m_GlobalPaths.at(i).size()-1).v = 0;
+
+				std::ostringstream str_out;
+				str_out << UtilityHNS::UtilityH::GetHomeDirectory();
+				if(m_ExperimentFolderName.size() == 0)
+					str_out << UtilityHNS::DataRW::LoggingMainfolderName;
+				else
+					str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentFolderName;
+
+				str_out << UtilityHNS::DataRW::GlobalPathLogFolderName;
+				str_out << "GlobalPath_";
+				str_out << i;
+				str_out << "_";
+				PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_GlobalPaths.at(i));
+
 			}
 
 			std::cout << "Received New Global Path Selector! " << std::endl;
@@ -319,6 +355,18 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayCons
 			if(path.size() > 0)
 				globalPathId_roll_outs = path.at(0).gid;
 		}
+
+// For CARLA challenge 
+//		if(m_RollOuts.size() > 1)
+//		{
+//			m_PlanningParams.enableSwerving = true;
+//			m_PlanningParams.rollOutNumber = m_RollOuts.size() - 1;
+//		}
+//		else
+//		{
+//			m_PlanningParams.enableSwerving = false;
+//			m_PlanningParams.rollOutNumber = 0;
+//		}
 
 		if(bWayGlobalPath && m_GlobalPaths.size() > 0)
 		{
@@ -365,18 +413,18 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 		{
 			if(m_Map.trafficLights.at(k).id == tl.id)
 			{
-				tl.pos = m_Map.trafficLights.at(k).pos;
+				tl.pose = m_Map.trafficLights.at(k).pose;
 				break;
 			}
 		}
 
 		if(msg.Signals.at(i).type == 1)
 		{
-			tl.lightState = PlannerHNS::GREEN_LIGHT;
+			tl.lightType = PlannerHNS::GREEN_LIGHT;
 		}
 		else
 		{
-			tl.lightState = PlannerHNS::RED_LIGHT;
+			tl.lightType = PlannerHNS::RED_LIGHT;
 		}
 
 		simulatedLights.push_back(tl);
@@ -419,6 +467,18 @@ void BehaviorGen::VisualizeLocalPlanner()
 	markerArray.markers.push_back(behavior_rviz);
 
 	pub_BehaviorStateRviz.publish(markerArray);
+
+	std_msgs::Float32 target_speed;
+	target_speed.data = m_CurrentBehavior.maxVelocity * 3.6;
+	pub_TargetSpeedRviz.publish(target_speed);
+	target_speed.data = m_CurrentPos.v * 3.6;
+	pub_ActualSpeedRviz.publish(target_speed);
+
+	visualization_msgs::MarkerArray selected_path;
+	std::vector<PlannerHNS::WayPoint> path = m_BehaviorGenerator.m_Path;
+	PlannerHNS::PlanningHelpers::FixPathDensity(path, 1.5);
+	PlannerHNS::ROSHelpers::TrajectoryToMarkersWithCircles(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path);
+	pub_SelectedPathRviz.publish(selected_path);
 
 	//To Test Synchronization Problem
 //	visualization_msgs::MarkerArray selected_path;
@@ -483,6 +543,11 @@ void BehaviorGen::SendLocalPlanningTopics()
 
 void BehaviorGen::LogLocalPlanningInfo(double dt)
 {
+	//just for carla
+	int curr_lucky_index = 0;
+	if(m_BehaviorGenerator.m_prev_index.size() > 0)
+		curr_lucky_index = m_BehaviorGenerator.m_prev_index.at(0);
+
 	timespec log_t;
 	UtilityHNS::UtilityH::GetTickCount(log_t);
 	std::ostringstream dataLine;
@@ -490,7 +555,8 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 			m_BehaviorGenerator.m_pCurrentBehaviorState->m_pParams->rollOutNumber << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->bFullyBlock << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCentralTrajectory << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCurrSafeTrajectory << "," <<
+			//m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCurrSafeTrajectory << "," << // only for carla
+			curr_lucky_index << "," <<// only for carla
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentStopSignID << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentTrafficLightID << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->minStoppingDistance << "," <<
@@ -503,29 +569,45 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 			m_VehicleStatus.speed << "," <<
 			m_VehicleStatus.steer << "," <<
 			m_BehaviorGenerator.state.pos.x << "," << m_BehaviorGenerator.state.pos.y << "," << m_BehaviorGenerator.state.pos.z << "," << UtilityHNS::UtilityH::SplitPositiveAngle(m_BehaviorGenerator.state.pos.a)+M_PI << ",";
-	m_LogData.push_back(dataLine.str());
+	if(m_LogData.size() < 150000) //in case I forget to turn off this node .. could fill the hard drive
+		m_LogData.push_back(dataLine.str());
 
-
-	if(bWayGlobalPathLogs)
+	if(m_CurrentBehavior.bNewPlan)
 	{
-		for(unsigned int i=0; i < m_GlobalPaths.size(); i++)
-		{
-			std::ostringstream str_out;
-			str_out << UtilityHNS::UtilityH::GetHomeDirectory();
+		std::ostringstream str_out;
+		str_out << UtilityHNS::UtilityH::GetHomeDirectory();
+		if(m_ExperimentFolderName.size() == 0)
 			str_out << UtilityHNS::DataRW::LoggingMainfolderName;
-			str_out << UtilityHNS::DataRW::PathLogFolderName;
-			str_out << "Global_Vel";
-			str_out << i;
-			str_out << "_";
-			PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_GlobalPaths.at(i));
-		}
-		bWayGlobalPathLogs = false;
+		else
+			str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentFolderName;
+		str_out << UtilityHNS::DataRW::PathLogFolderName;
+		str_out << "Local_Trajectory_";
+		PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_BehaviorGenerator.m_Path);
 	}
+// disabled for CARLA 
+//	if(bWayGlobalPathLogs)
+//	{
+//		for(unsigned int i=0; i < m_GlobalPaths.size(); i++)
+//		{
+//			std::ostringstream str_out;
+//			str_out << UtilityHNS::UtilityH::GetHomeDirectory();
+//			if(m_ExperimentFolderName.size() == 0)
+//				str_out << UtilityHNS::DataRW::LoggingMainfolderName;
+//			else
+//				str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentFolderName;
+//			str_out << UtilityHNS::DataRW::PathLogFolderName;
+//			str_out << "Global_Path_";
+//			str_out << i;
+//			str_out << "_";
+//			PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_GlobalPaths.at(i));
+//		}
+//		bWayGlobalPathLogs = false;
+//	}
 }
 
 void BehaviorGen::MainLoop()
 {
-	ros::Rate loop_rate(100);
+	ros::Rate loop_rate(50);
 
 
 	timespec planningTimer;
@@ -533,15 +615,17 @@ void BehaviorGen::MainLoop()
 
 	while (ros::ok())
 	{
-		ros::spinOnce();
 
 		double dt  = UtilityHNS::UtilityH::GetTimeDiffNow(planningTimer);
 		UtilityHNS::UtilityH::GetTickCount(planningTimer);
 
+		ros::spinOnce();
+
 		if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
 		{
 			bMap = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_MapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_MapPath, m_Map);
 		}
 		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
 		{
@@ -560,7 +644,7 @@ void BehaviorGen::MainLoop()
 						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
 						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
 						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
-						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, false);
+						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, false);
 
 				if(m_Map.roadSegments.size() > 0)
 				{
@@ -574,7 +658,7 @@ void BehaviorGen::MainLoop()
 						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
 						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
 						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,  PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, false);
+						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr, PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, false);
 
 				if(m_Map.roadSegments.size() > 0)
 				{
@@ -596,9 +680,11 @@ void BehaviorGen::MainLoop()
 			{
 				bNewLightStatus = false;
 				for(unsigned int itls = 0 ; itls < m_PrevTrafficLight.size() ; itls++)
-					m_PrevTrafficLight.at(itls).lightState = m_CurrLightStatus;
+					m_PrevTrafficLight.at(itls).lightType = m_CurrLightStatus;
 			}
 
+			// just for CARLA 
+			//m_BehaviorGenerator.UpdateAvoidanceParams(m_PlanningParams.enableSwerving, m_PlanningParams.rollOutNumber);
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
 			SendLocalPlanningTopics();

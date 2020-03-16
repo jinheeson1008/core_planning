@@ -15,6 +15,7 @@
  */
 
 #include "way_planner_core.h"
+#include "op_planner/KmlMapLoader.h"
 
 namespace WayPlannerNS {
 
@@ -356,7 +357,7 @@ void way_planner_core::UpdateRoadMap(const AutowareRoadNetwork& src_map, Planner
 	std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;
 
 	PlannerHNS::GPSPoint origin;//(m_OriginPos.position.x, m_OriginPos.position.y, m_OriginPos.position.z, 0);
-	PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(lanes, points, dts, inters, areas, line_data, stop_line_data, signal_data, vector_data, curb_data, roadedge_data,way_area, crossing, nodes_data, conn_data, origin, out_map);
+	PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(lanes, points, dts, inters, areas, line_data, stop_line_data, signal_data, vector_data, curb_data, roadedge_data,way_area, crossing, nodes_data, conn_data, nullptr, nullptr, origin, out_map);
 }
 
 bool way_planner_core::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, PlannerHNS::WayPoint& goalPoint, std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths)
@@ -668,7 +669,8 @@ void way_planner_core::PlannerMainLoop()
 		if(m_params.mapSource == MAP_KML_FILE && !m_bKmlMap)
 		{
 			m_bKmlMap = true;
-			PlannerHNS::MappingHelpers::LoadKML(m_params.KmlMapPath, m_Map);
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_params.KmlMapPath, m_Map);
 			//PlannerHNS::MappingHelpers::WriteKML("/home/hatem/SimuLogs/KmlMaps/ToyotaMap2017.kml", "/home/hatem/SimuLogs/KmlMaps/PlannerX_MapTemplate.kml", m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);

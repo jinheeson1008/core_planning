@@ -30,16 +30,16 @@
 #include <visualization_msgs/MarkerArray.h>
 
 #include "op_planner/PlannerCommonDef.h"
-#include "op_planner/TrajectoryDynamicCosts.h"
+#include "op_planner/TrajectoryEvaluator.h"
 
 namespace TrajectoryEvaluatorNS
 {
 
-class TrajectoryEval
+class TrajectoryEvalCore
 {
 protected:
 
-	PlannerHNS::TrajectoryDynamicCosts m_TrajectoryCostsCalculator;
+        PlannerHNS::TrajectoryEvaluator m_TrajectoryCostsCalculator;
 	bool m_bUseMoveingObjectsPrediction;
 
 	geometry_msgs::Pose m_OriginPos;
@@ -54,6 +54,7 @@ protected:
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPaths;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPathsToUse;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPathSections;
+	std::vector<int> m_prev_index;
 	std::vector<PlannerHNS::WayPoint> t_centerTrajectorySmoothed;
 	bool bWayGlobalPath;
 	bool bWayGlobalPathToUse;
@@ -75,6 +76,8 @@ protected:
 
   	visualization_msgs::MarkerArray m_CollisionsDummy;
 	visualization_msgs::MarkerArray m_CollisionsActual;
+
+	std::string m_ExperimentFolderName;
 
 	//ROS messages (topics)
 	ros::NodeHandle nh;
@@ -112,8 +115,8 @@ protected:
   void UpdatePlanningParams(ros::NodeHandle& _nh);
 
 public:
-  TrajectoryEval();
-  ~TrajectoryEval();
+  TrajectoryEvalCore();
+  ~TrajectoryEvalCore();
   void MainLoop();
 };
 
