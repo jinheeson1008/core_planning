@@ -17,6 +17,7 @@
 #include "op_global_planner_core.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
 #include "op_planner/KmlMapLoader.h"
+#include "op_planner/Lanelet2MapLoader.h"
 
 namespace GlobalPlanningNS
 {
@@ -64,6 +65,19 @@ GlobalPlanner::GlobalPlanner()
 		m_params.mapSource = PlannerHNS::MAP_FOLDER;
 	else if(iSource == 2)
 		m_params.mapSource = PlannerHNS::MAP_KML_FILE;
+	else if(iSource == 3)
+	{
+		m_params.mapSource = PlannerHNS::MAP_LANELET_2;
+		std::string str_origin;
+		nh.getParam("/op_global_planner/lanelet2_origin" , str_origin);
+		std::vector<std::string> lat_lon_alt = PlannerHNS::MappingHelpers::SplitString(str_origin, ",");
+		if(lat_lon_alt.size() == 3)
+		{
+			m_Map.origin.pos.lat = atof(lat_lon_alt.at(0).c_str());
+			m_Map.origin.pos.lon = atof(lat_lon_alt.at(1).c_str());
+			m_Map.origin.pos.alt = atof(lat_lon_alt.at(2).c_str());
+		}
+	}
 
 	pub_Paths = nh.advertise<autoware_msgs::LaneArray>("lane_waypoints_array", 1, true);
 	pub_PathsRviz = nh.advertise<visualization_msgs::MarkerArray>("global_waypoints_rviz", 1, true);
@@ -97,6 +111,7 @@ GlobalPlanner::GlobalPlanner()
 	//Mapping Section
 	if(m_params.mapSource == PlannerHNS::MAP_AUTOWARE)
 	{
+		sub_bin_map = nh.subscribe("/lanelet_map_bin", 1, &GlobalPlanner::callbackGetLanelet2, this);
 		sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &GlobalPlanner::callbackGetVMLanes,  this);
 		sub_points = nh.subscribe("/vector_map_info/point", 1, &GlobalPlanner::callbackGetVMPoints,  this);
 		sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &GlobalPlanner::callbackGetVMdtLanes,  this);
@@ -452,6 +467,12 @@ void GlobalPlanner::MainLoop()
 
 			pub_MapRviz.publish(map_marker_array);
 		}
+		else if (m_params.mapSource == PlannerHNS::MAP_LANELET_2 && !m_bKmlMap)
+		{
+			m_bKmlMap = true;
+			PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+			map_loader.LoadMap(m_params.KmlMapPath, m_Map);
+		}
 		else if (m_params.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bKmlMap)
 		{
 			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;
@@ -534,6 +555,17 @@ void GlobalPlanner::MainLoop()
 
 
 //Mapping Section
+
+void GlobalPlanner::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
+{
+	PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+	map_loader.LoadMap(msg, m_Map);
+
+	m_bKmlMap = true;
+	visualization_msgs::MarkerArray map_marker_array;
+	PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
+	pub_MapRviz.publish(map_marker_array);
+}
 
 void GlobalPlanner::callbackGetVMLanes(const vector_map_msgs::LaneArray& msg)
 {

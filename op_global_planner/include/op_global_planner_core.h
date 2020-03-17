@@ -43,6 +43,7 @@
 #include <std_msgs/Int8.h>
 #include "autoware_can_msgs/CANInfo.h"
 #include <visualization_msgs/MarkerArray.h>
+#include <autoware_lanelet2_msgs/MapBin.h>
 
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/MappingHelpers.h"
@@ -162,6 +163,7 @@ private:
 
 
   	//Mapping Section
+  	ros::Subscriber sub_bin_map;
 
   	UtilityHNS::MapRaw m_MapRaw;
 
@@ -181,6 +183,7 @@ private:
 	ros::Subscriber sub_nodes;
 
 
+	void callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg);
 	void callbackGetVMLanes(const vector_map_msgs::LaneArray& msg);
 	void callbackGetVMPoints(const vector_map_msgs::PointArray& msg);
 	void callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg);
