@@ -18,6 +18,7 @@
 #include "op_ros_helpers/op_ROSHelpers.h"
 #include "op_planner/KmlMapLoader.h"
 #include "op_planner/Lanelet2MapLoader.h"
+#include "op_planner/VectorMapLoader.h"
 
 namespace GlobalPlanningNS
 {
@@ -461,7 +462,9 @@ void GlobalPlanner::MainLoop()
 		else if (m_params.mapSource == PlannerHNS::MAP_FOLDER && !m_bKmlMap)
 		{
 			m_bKmlMap = true;
-			PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_params.KmlMapPath, m_Map, true);
+			//PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_params.KmlMapPath, m_Map, true);
+			PlannerHNS::VectorMapLoader vec_loader;
+			vec_loader.LoadFromFile(m_params.KmlMapPath, m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
 
@@ -475,29 +478,35 @@ void GlobalPlanner::MainLoop()
 		}
 		else if (m_params.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bKmlMap)
 		{
-			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;
+			if(m_MapRaw.AreMessagesReceived())
+			{
+				m_bKmlMap = true;
+				PlannerHNS::VectorMapLoader vec_loader;
+				vec_loader.LoadFromData(m_MapRaw, m_Map);
+			}
 
-			if(m_MapRaw.GetVersion()==2)
-			{
-				std::cout << "Map Version 2" << endl;
-				m_bKmlMap = true;
-				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessageV2(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
-						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines,  m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true, m_params.bEnableLaneChange, false);
-			}
-			else if(m_MapRaw.GetVersion()==1)
-			{
-				std::cout << "Map Version 1" << endl;
-				m_bKmlMap = true;
-				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr, PlannerHNS::GPSPoint(), m_Map, true, m_params.bEnableLaneChange, false);
-			}
+//			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;
+//			if(m_MapRaw.GetVersion()==2)
+//			{
+//				std::cout << "Map Version 2" << endl;
+//				m_bKmlMap = true;
+//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessageV2(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
+//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
+//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
+//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
+//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
+//						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines,  m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true, m_params.bEnableLaneChange, false);
+//			}
+//			else if(m_MapRaw.GetVersion()==1)
+//			{
+//				std::cout << "Map Version 1" << endl;
+//				m_bKmlMap = true;
+//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
+//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
+//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
+//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
+//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr, PlannerHNS::GPSPoint(), m_Map, true, m_params.bEnableLaneChange, false);
+//			}
 
 			if(m_bKmlMap)
 			{
@@ -552,7 +561,6 @@ void GlobalPlanner::MainLoop()
 		loop_rate.sleep();
 	}
 }
-
 
 //Mapping Section
 

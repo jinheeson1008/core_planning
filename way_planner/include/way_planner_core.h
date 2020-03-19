@@ -193,7 +193,6 @@ private:
   	PlannerHNS::PlannerH m_PlannerH;
   	std::vector<std::vector<PlannerHNS::WayPoint> > m_GeneratedTotalPaths;
 
-  	void UpdateRoadMap(const AutowareRoadNetwork& src_map, PlannerHNS::RoadNetwork& out_map);
   	bool GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, PlannerHNS::WayPoint& goalPoint, std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths);
   	void VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> > generatedTotalPaths);
 

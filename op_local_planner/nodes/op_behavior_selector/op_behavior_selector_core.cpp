@@ -18,6 +18,8 @@
 #include "op_ros_helpers/op_ROSHelpers.h"
 #include "op_planner/MappingHelpers.h"
 #include "op_planner/KmlMapLoader.h"
+#include "op_planner/Lanelet2MapLoader.h"
+#include "op_planner/VectorMapLoader.h"
 
 namespace BehaviorGeneratorNS
 {
@@ -168,6 +170,19 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 		m_MapType = PlannerHNS::MAP_FOLDER;
 	else if(iSource == 2)
 		m_MapType = PlannerHNS::MAP_KML_FILE;
+	else if(iSource == 3)
+	{
+		m_MapType = PlannerHNS::MAP_LANELET_2;
+		std::string str_origin;
+		nh.getParam("/op_common_params/lanelet2_origin" , str_origin);
+		std::vector<std::string> lat_lon_alt = PlannerHNS::MappingHelpers::SplitString(str_origin, ",");
+		if(lat_lon_alt.size() == 3)
+		{
+			m_Map.origin.pos.lat = atof(lat_lon_alt.at(0).c_str());
+			m_Map.origin.pos.lon = atof(lat_lon_alt.at(1).c_str());
+			m_Map.origin.pos.alt = atof(lat_lon_alt.at(2).c_str());
+		}
+	}
 
 	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
 	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
@@ -630,42 +645,56 @@ void BehaviorGen::MainLoop()
 		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
 		{
 			bMap = true;
-			PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_MapPath, m_Map, true);
+			PlannerHNS::VectorMapLoader vec_loader;
+			vec_loader.LoadFromFile(m_MapPath, m_Map);
+			//PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_MapPath, m_Map, true);
 
+		}
+		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
+		{
+			bMap = true;
+			PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+			map_loader.LoadMap(m_MapPath, m_Map);
 		}
 		else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
 		{
-			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;
-
-			if(m_MapRaw.GetVersion()==2)
+			if(m_MapRaw.AreMessagesReceived())
 			{
-				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessageV2(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
-						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, false);
-
-				if(m_Map.roadSegments.size() > 0)
-				{
-					bMap = true;
-					std::cout << " ******* Map V2 Is Loaded successfully from the Behavior Selector !! " << std::endl;
-				}
+				bMap = true;
+				PlannerHNS::VectorMapLoader vec_loader;
+				vec_loader.LoadFromData(m_MapRaw, m_Map);
 			}
-			else if(m_MapRaw.GetVersion()==1)
-			{
-				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr, PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, false);
 
-				if(m_Map.roadSegments.size() > 0)
-				{
-					bMap = true;
-					std::cout << " ******* Map V1 Is Loaded successfully from the Behavior Selector !! " << std::endl;
-				}
-			}
+//			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;
+//			if(m_MapRaw.GetVersion()==2)
+//			{
+//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessageV2(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
+//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
+//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
+//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
+//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
+//						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, false);
+//
+//				if(m_Map.roadSegments.size() > 0)
+//				{
+//					bMap = true;
+//					std::cout << " ******* Map V2 Is Loaded successfully from the Behavior Selector !! " << std::endl;
+//				}
+//			}
+//			else if(m_MapRaw.GetVersion()==1)
+//			{
+//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
+//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
+//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
+//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
+//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr, PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, false);
+//
+//				if(m_Map.roadSegments.size() > 0)
+//				{
+//					bMap = true;
+//					std::cout << " ******* Map V1 Is Loaded successfully from the Behavior Selector !! " << std::endl;
+//				}
+//			}
 		}
 
 		if(bNewCurrentPos && m_GlobalPaths.size()>0)

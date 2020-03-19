@@ -37,6 +37,7 @@
 #include "op_utility/UtilityH.h"
 #include "op_planner/MatrixOperations.h"
 #include "op_planner/KmlMapLoader.h"
+#include "op_planner/VectorMapLoader.h"
 
 namespace PlannerXNS
 {
@@ -617,7 +618,8 @@ void PlannerX::PlannerMainLoop()
 		else if(m_MapSource == MAP_FOLDER && !bKmlMapLoaded)
 		{
 			bKmlMapLoaded = true;
-			PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_KmlMapPath, m_Map, true);
+			PlannerHNS::VectorMapLoader vec_loader;
+			vec_loader.LoadFromFile(m_KmlMapPath, m_Map);
 		}
 		else if(m_MapSource == MAP_AUTOWARE)
 		{
@@ -626,7 +628,11 @@ void PlannerX::PlannerMainLoop()
 				timespec timerTemp;
 				UtilityHNS::UtilityH::GetTickCount(timerTemp);
 				 m_AwMap.bDtLanes = m_AwMap.bLanes = m_AwMap.bPoints = false;
-				 ROSHelpers::UpdateRoadMap(m_AwMap,m_Map);
+
+				 UtilityHNS::MapRaw map_raw;
+				map_raw.LoadFromData(m_AwMap.lanes, m_AwMap.dtlanes, m_AwMap.points);
+				PlannerHNS::VectorMapLoader vec_loader;
+				vec_loader.LoadFromData(map_raw, m_Map);
 				 std::cout << "Converting Vector Map Time : " <<UtilityHNS::UtilityH::GetTimeDiffNow(timerTemp) << std::endl;
 				 //sub_WayPlannerPaths = nh.subscribe("/lane_waypoints_array", 	10,		&PlannerX::callbackGetWayPlannerPath, 	this);
 			 }
