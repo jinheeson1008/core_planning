@@ -462,7 +462,6 @@ void GlobalPlanner::MainLoop()
 		else if (m_params.mapSource == PlannerHNS::MAP_FOLDER && !m_bKmlMap)
 		{
 			m_bKmlMap = true;
-			//PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_params.KmlMapPath, m_Map, true);
 			PlannerHNS::VectorMapLoader vec_loader;
 			vec_loader.LoadFromFile(m_params.KmlMapPath, m_Map);
 			visualization_msgs::MarkerArray map_marker_array;

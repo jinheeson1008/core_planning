@@ -14,6 +14,7 @@ find_package(
     op_utility
     pcl_conversions
     vector_map_msgs
+    lanelet2_extension
 )
 
 find_package(OpenCV REQUIRED)

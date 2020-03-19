@@ -233,11 +233,11 @@ void OpenPlannerCarSimulator::ReadParamFromLaunchFile(PlannerHNS::CAR_BASIC_INFO
 	int iSource = 0;
 	_nh.getParam("mapSource" 			, iSource);
 	if(iSource == 0)
-		m_SimParams.mapSource = MAP_AUTOWARE;
+		m_SimParams.mapSource = PlannerHNS::MAP_AUTOWARE;
 	else if(iSource == 1)
-		m_SimParams.mapSource = MAP_FOLDER;
+		m_SimParams.mapSource = PlannerHNS::MAP_FOLDER;
 	else if(iSource == 2)
-		m_SimParams.mapSource = MAP_KML_FILE;
+		m_SimParams.mapSource = PlannerHNS::MAP_KML_FILE;
 	else if(iSource == 3)
 	{
 		m_SimParams.mapSource = PlannerHNS::MAP_LANELET_2;
@@ -797,14 +797,14 @@ void OpenPlannerCarSimulator::MainLoop()
 
 		bool bMakeNewPlan = false;
 
-		if(m_SimParams.mapSource == MAP_KML_FILE && !m_bMap)
+		if(m_SimParams.mapSource == PlannerHNS::MAP_KML_FILE && !m_bMap)
 		{
 			m_bMap = true;
 			PlannerHNS::KmlMapLoader kml_loader;
 			kml_loader.LoadKML(m_SimParams.KmlMapPath, m_Map);
 			InitializeSimuCar(m_SimParams.startPose);
 		}
-		else if (m_SimParams.mapSource == MAP_FOLDER && !m_bMap)
+		else if (m_SimParams.mapSource == PlannerHNS::MAP_FOLDER && !m_bMap)
 		{
 			m_bMap = true;
 			PlannerHNS::VectorMapLoader vec_loader;
@@ -821,9 +821,14 @@ void OpenPlannerCarSimulator::MainLoop()
 		{
 			if(m_MapRaw.AreMessagesReceived())
 			{
-				m_bMap = true;
 				PlannerHNS::VectorMapLoader vec_loader;
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
+				if(m_Map.roadSegments.size() > 0)
+				{
+					m_bMap = true;
+					InitializeSimuCar(m_SimParams.startPose);
+					std::cout << " ******* Map V2 Is Loaded successfully from the Behavior Selector !! " << std::endl;
+				}
 			}
 
 //			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;

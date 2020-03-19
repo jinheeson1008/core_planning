@@ -79,6 +79,7 @@ BehaviorGen::BehaviorGen()
 	//Mapping Section
 	if(m_MapType == PlannerHNS::MAP_AUTOWARE)
 	{
+		sub_bin_map = nh.subscribe("/lanelet_map_bin", 1, &BehaviorGen::callbackGetLanelet2, this);
 		sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &BehaviorGen::callbackGetVMLanes,  this);
 		sub_points = nh.subscribe("/vector_map_info/point", 1, &BehaviorGen::callbackGetVMPoints,  this);
 		sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &BehaviorGen::callbackGetVMdtLanes,  this);
@@ -647,8 +648,6 @@ void BehaviorGen::MainLoop()
 			bMap = true;
 			PlannerHNS::VectorMapLoader vec_loader;
 			vec_loader.LoadFromFile(m_MapPath, m_Map);
-			//PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_MapPath, m_Map, true);
-
 		}
 		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
 		{
@@ -728,6 +727,13 @@ void BehaviorGen::MainLoop()
 }
 
 //Mapping Section
+
+void BehaviorGen::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
+{
+	PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+	map_loader.LoadMap(msg, m_Map);
+	bMap = true;
+}
 
 void BehaviorGen::callbackGetVMLanes(const vector_map_msgs::LaneArray& msg)
 {

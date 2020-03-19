@@ -163,10 +163,8 @@ private:
 
 
   	//Mapping Section
-  	ros::Subscriber sub_bin_map;
-
   	UtilityHNS::MapRaw m_MapRaw;
-
+  	ros::Subscriber sub_bin_map;
 	ros::Subscriber sub_lanes;
 	ros::Subscriber sub_points;
 	ros::Subscriber sub_dt_lanes;

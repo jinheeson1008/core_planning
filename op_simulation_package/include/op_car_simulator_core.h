@@ -68,7 +68,7 @@ namespace CarSimulatorNS
 #define BUTTON_INDEX 0
 #define START_BUTTON_VALUE 512
 
-enum MAP_SOURCE_TYPE{MAP_AUTOWARE, MAP_FOLDER, MAP_KML_FILE};
+//enum MAP_SOURCE_TYPE{MAP_AUTOWARE, MAP_FOLDER, MAP_KML_FILE};
 
 class SimuCommandParams
 {
@@ -78,7 +78,7 @@ public:
 	std::string 	strID;
 	std::string 	meshPath;
 	std::string 	logPath;
-	MAP_SOURCE_TYPE	mapSource;
+	PlannerHNS::MAP_SOURCE_TYPE	mapSource;
 	bool			bRvizPositions;
 	bool 			bLooper;
 	PlannerHNS::WayPoint startPose;
@@ -92,7 +92,7 @@ public:
 		bEnableLogs = true;
 		bLooper = false;
 		bRvizPositions = true;
-		mapSource = MAP_FOLDER;
+		mapSource = PlannerHNS::MAP_FOLDER;
 		modelColor.a = 1;
 		modelColor.b = 1;
 		modelColor.r = 1;

@@ -74,6 +74,7 @@ MotionPrediction::MotionPrediction()
 	//Mapping Section
 	if(m_MapType == PlannerHNS::MAP_AUTOWARE)
 	{
+		sub_bin_map = nh.subscribe("/lanelet_map_bin", 1, &MotionPrediction::callbackGetLanelet2, this);
 		sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &MotionPrediction::callbackGetVMLanes,  this);
 		sub_points = nh.subscribe("/vector_map_info/point", 1, &MotionPrediction::callbackGetVMPoints,  this);
 		sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &MotionPrediction::callbackGetVMdtLanes,  this);
@@ -532,6 +533,13 @@ void MotionPrediction::MainLoop()
 }
 
 //Mapping Section
+
+void MotionPrediction::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
+{
+	PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+	map_loader.LoadMap(msg, m_Map);
+	bMap = true;
+}
 
 void MotionPrediction::callbackGetVMLanes(const vector_map_msgs::LaneArray& msg)
 {

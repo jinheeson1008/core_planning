@@ -20,6 +20,8 @@
 #include "op_planner/MatrixOperations.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
 #include "op_planner/KmlMapLoader.h"
+#include "op_planner/Lanelet2MapLoader.h"
+#include "op_planner/VectorMapLoader.h"
 
 namespace DataLoggerNS
 {
@@ -35,9 +37,24 @@ OpenPlannerDataLogger::OpenPlannerDataLogger()
 	int iSource = 0;
 	_nh.getParam("mapSource" , iSource);
 	if(iSource == 0)
+		m_MapType = PlannerHNS::MAP_AUTOWARE;
+	else if (iSource == 1)
 		m_MapType = PlannerHNS::MAP_FOLDER;
-	else if(iSource == 1)
+	else if(iSource == 2)
 		m_MapType = PlannerHNS::MAP_KML_FILE;
+	else if(iSource == 3)
+	{
+		m_MapType = PlannerHNS::MAP_LANELET_2;
+		std::string str_origin;
+		nh.getParam("lanelet2_origin" , str_origin);
+		std::vector<std::string> lat_lon_alt = PlannerHNS::MappingHelpers::SplitString(str_origin, ",");
+		if(lat_lon_alt.size() == 3)
+		{
+			m_Map.origin.pos.lat = atof(lat_lon_alt.at(0).c_str());
+			m_Map.origin.pos.lon = atof(lat_lon_alt.at(1).c_str());
+			m_Map.origin.pos.alt = atof(lat_lon_alt.at(2).c_str());
+		}
+	}
 
 	_nh.getParam("mapFileName" , m_MapPath);
 
@@ -346,7 +363,14 @@ void OpenPlannerDataLogger::MainLoop()
 		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
 		{
 			bMap = true;
-			PlannerHNS::MappingHelpers::ConstructRoadNetworkFromDataFiles(m_MapPath, m_Map, true);
+			PlannerHNS::VectorMapLoader vec_loader;
+			vec_loader.LoadFromFile(m_MapPath, m_Map);
+		}
+		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
+		{
+			bMap = true;
+			PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+			map_loader.LoadMap(m_MapPath, m_Map);
 		}
 
 		ros::Time t;
