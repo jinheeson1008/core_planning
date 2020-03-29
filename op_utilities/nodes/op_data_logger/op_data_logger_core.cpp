@@ -369,7 +369,7 @@ void OpenPlannerDataLogger::MainLoop()
 		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
 		{
 			bMap = true;
-			PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+			PlannerHNS::Lanelet2MapLoader map_loader;
 			map_loader.LoadMap(m_MapPath, m_Map);
 		}
 

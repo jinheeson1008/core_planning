@@ -472,7 +472,7 @@ void GlobalPlanner::MainLoop()
 		else if (m_params.mapSource == PlannerHNS::MAP_LANELET_2 && !m_bKmlMap)
 		{
 			m_bKmlMap = true;
-			PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+			PlannerHNS::Lanelet2MapLoader map_loader;
 			map_loader.LoadMap(m_params.KmlMapPath, m_Map);
 		}
 		else if (m_params.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bKmlMap)
@@ -565,7 +565,7 @@ void GlobalPlanner::MainLoop()
 
 void GlobalPlanner::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
 {
-	PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+	PlannerHNS::Lanelet2MapLoader map_loader;
 	map_loader.LoadMap(msg, m_Map);
 
 	m_bKmlMap = true;

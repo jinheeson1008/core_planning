@@ -814,7 +814,7 @@ void OpenPlannerCarSimulator::MainLoop()
 		else if (m_SimParams.mapSource == PlannerHNS::MAP_LANELET_2 && !m_bMap)
 		{
 			m_bMap = true;
-			PlannerHNS::Lanelet2MapLoader map_loader(m_Map.origin);
+			PlannerHNS::Lanelet2MapLoader map_loader;
 			map_loader.LoadMap(m_SimParams.KmlMapPath, m_Map);
 		}
 		else if (m_SimParams.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bMap)
