@@ -711,17 +711,10 @@ void BehaviorGen::MainLoop()
 
 		if(bNewCurrentPos && m_GlobalPaths.size()>0)
 		{
-			if(bNewLightSignal)
-			{
-				m_PrevTrafficLight = m_CurrTrafficLight;
-				bNewLightSignal = false;
-			}
 
-			if(bNewLightStatus)
+			for(auto& x: m_CurrTrafficLight)
 			{
-				bNewLightStatus = false;
-				for(unsigned int itls = 0 ; itls < m_PrevTrafficLight.size() ; itls++)
-					m_PrevTrafficLight.at(itls).lightType = m_CurrLightStatus;
+				x.lightType = m_CurrLightStatus;
 			}
 
 			// just for CARLA 
