@@ -51,7 +51,7 @@
 	<arg name="vel_can_topic"				default="/can_info" />		
 	<arg name="experimentName" 				default="" />		
 	
-	<arg name="objects_input_topic" default="/detection/object_tracker/objects" />
+	<arg name="objects_input_topic" 		default="/detection/object_tracker/objects" />
 
 	<node pkg="op_local_planner" type="op_common_params" name="op_common_params" output="screen">	
 	<param name="mapSource" 				value="$(arg mapSource)" /> <!-- Autoware=0, Vector Map Folder=1, kml=2 -->
@@ -86,15 +86,15 @@
 	<param name="steeringDelay" 			value="$(arg steeringDelay)" />
 	<param name="minPursuiteDistance" 		value="$(arg minPursuiteDistance)"  />	
 	<param name="additionalBrakingDistance" value="$(arg additionalBrakingDistance)"  />
-	<param name="giveUpDistance" value="$(arg giveUpDistance)"  />
+	<param name="giveUpDistance" 			value="$(arg giveUpDistance)"  />
 	<param name="maxAcceleration" 			value="$(arg maxAcceleration)" />
 	<param name="maxDeceleration" 			value="$(arg maxDeceleration)" />
 	<param name="velocitySource"			value="$(arg velocitySource)" /> <!-- read velocities from (0- Odometry, 1- autoware current_velocities, 2- car_info) "" -->
 	<param name="vel_odom_topic"			value="$(arg vel_odom_topic)" />
 	<param name="vel_curr_topic"			value="$(arg vel_curr_topic)" />
-	<param name="vel_can_topic"			value="$(arg vel_can_topic)" />			
+	<param name="vel_can_topic"				value="$(arg vel_can_topic)" />			
 	<param name="experimentName" 			value="$(arg experimentName)" />	
-	<remap from="detection/object_tracker/objects" to="$(arg objects_input_topic)" />	
+	<param name="objects_input_topic" 		value="$(arg objects_input_topic)" />	
 	</node>				
 			
 </launch>

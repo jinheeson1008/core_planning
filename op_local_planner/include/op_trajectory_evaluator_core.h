@@ -78,6 +78,7 @@ protected:
 	visualization_msgs::MarkerArray m_CollisionsActual;
 
 	std::string m_ExperimentFolderName;
+	std::string m_EstimatedObjectsTopicName;
 
 	//ROS messages (topics)
 	ros::NodeHandle nh;

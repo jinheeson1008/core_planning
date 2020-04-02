@@ -103,6 +103,7 @@ protected:
 	timespec m_SensingTimer;
 
 	std::string m_ExperimentFolderName;
+	std::string m_TrackedObjectsTopicName;
 
 	ros::NodeHandle nh;
 	ros::Publisher pub_predicted_objects_trajectories;

@@ -32,7 +32,8 @@ GlobalPlanner::GlobalPlanner()
 	m_GlobalPathID = 1;
 
 	tf::StampedTransform transform;
-	PlannerHNS::ROSHelpers::GetTransformFromTF("map", "world", transform);
+	tf::TransformListener tf_listener;
+	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();

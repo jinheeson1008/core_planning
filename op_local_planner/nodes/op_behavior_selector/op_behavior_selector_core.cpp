@@ -40,7 +40,8 @@ BehaviorGen::BehaviorGen()
 	UpdatePlanningParams(_nh);
 
 	tf::StampedTransform transform;
-	PlannerHNS::ROSHelpers::GetTransformFromTF("map", "world", transform);
+	tf::TransformListener tf_listener;
+	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
@@ -188,6 +189,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
 	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
 	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
+
 
 	if(m_ExperimentFolderName.size() > 0)
 	{

@@ -137,8 +137,6 @@ public:
 private:
   PlannerHNS::WayPoint* m_pCurrGoal;
 
-  void GetTransformFromTF(const std::string parent_frame, const std::string child_frame, tf::StampedTransform &transform);
-
   // Callback function for subscriber.
   void callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr &msg);
   void callbackGetStartPose(const geometry_msgs::PoseWithCovarianceStampedConstPtr &input);

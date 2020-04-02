@@ -176,7 +176,7 @@ public:
 
 	void MainLoop();
 
-  void GetTransformFromTF(const std::string parent_frame, const std::string child_frame, tf::StampedTransform &transform);
+	void GetTransformFromTF(const std::string parent_frame, const std::string child_frame, tf::StampedTransform &transform);
 
   void ReadParamFromLaunchFile(PlannerHNS::CAR_BASIC_INFO& m_CarInfo,
 		  PlannerHNS::ControllerParams& m_ControlParams);

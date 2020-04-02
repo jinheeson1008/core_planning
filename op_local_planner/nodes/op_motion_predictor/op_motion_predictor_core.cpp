@@ -39,12 +39,13 @@ MotionPrediction::MotionPrediction()
 	UpdatePlanningParams(_nh);
 
 	tf::StampedTransform transform;
-	PlannerHNS::ROSHelpers::GetTransformFromTF("map", "world", transform);
+	tf::TransformListener tf_listener;
+	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
 
-	pub_predicted_objects_trajectories = nh.advertise<autoware_msgs::DetectedObjectArray>("/detection/object_tracker/objects", 1);
+	pub_predicted_objects_trajectories = nh.advertise<autoware_msgs::DetectedObjectArray>("/predicted_objects", 1);
 	pub_PredictedTrajectoriesRviz = nh.advertise<visualization_msgs::MarkerArray>("/predicted_trajectories_rviz", 1);
 	pub_CurbsRviz					= nh.advertise<visualization_msgs::MarkerArray>("/map_curbs_rviz", 1);
 	pub_ParticlesRviz = nh.advertise<visualization_msgs::MarkerArray>("prediction_particles", 1);
@@ -53,7 +54,7 @@ MotionPrediction::MotionPrediction()
 	pub_TargetPointsRviz = nh.advertise<visualization_msgs::MarkerArray>("target_points_on_trajs", 1);
 
 	sub_StepSignal = nh.subscribe("/pred_step_signal", 		1, &MotionPrediction::callbackGetStepForwardSignals, 		this);
-	sub_tracked_objects	= nh.subscribe("/tracked_objects", 			1,		&MotionPrediction::callbackGetTrackedObjects, 		this);
+	sub_tracked_objects	= nh.subscribe(m_TrackedObjectsTopicName, 	1,	&MotionPrediction::callbackGetTrackedObjects, 		this);
 	sub_current_pose 	= nh.subscribe("/current_pose", 10,	&MotionPrediction::callbackGetCurrentPose, 		this);
 
 	int bVelSource = 1;
@@ -174,6 +175,8 @@ void MotionPrediction::UpdatePlanningParams(ros::NodeHandle& _nh)
 			m_ExperimentFolderName.push_back('/');
 	}
 
+	_nh.getParam("/op_common_params/objects_input_topic" , m_TrackedObjectsTopicName);
+
 	UtilityHNS::DataRW::CreateLoggingMainFolder();
 	if(m_ExperimentFolderName.size() > 1)
 		UtilityHNS::DataRW::CreateExperimentFolder(m_ExperimentFolderName);
@@ -252,16 +255,30 @@ void MotionPrediction::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& ms
 void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg)
 {
 	UtilityHNS::UtilityH::GetTickCount(m_SensingTimer);
+
+	autoware_msgs::DetectedObjectArray localObjects = *msg;
+	std::string source_data_frame = msg->header.frame_id;
+	std::string target_tracking_frame = "map";
+
+	if(source_data_frame.compare(target_tracking_frame) > 0)
+	{
+		tf::TransformListener tf_listener;
+		tf::StampedTransform local2global;
+		PlannerHNS::ROSHelpers::getTransformFromTF(source_data_frame, target_tracking_frame, tf_listener, local2global);
+		PlannerHNS::ROSHelpers::transformDetectedObjects(source_data_frame, target_tracking_frame, local2global, *msg, localObjects);
+	}
+
+
 	m_TrackedObjects.clear();
 	bTrackedObjects = true;
 
 	PlannerHNS::DetectedObject obj;
 
-	for(unsigned int i = 0 ; i <msg->objects.size(); i++)
+	for(unsigned int i = 0 ; i <localObjects.objects.size(); i++)
 	{
-		if(msg->objects.at(i).id > 0)
+		if(localObjects.objects.at(i).id > 0)
 		{
-			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(msg->objects.at(i), obj);
+			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(localObjects.objects.at(i), obj);
 			m_TrackedObjects.push_back(obj);
 		}
 	}
