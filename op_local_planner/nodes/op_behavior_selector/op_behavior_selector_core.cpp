@@ -436,13 +436,26 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 			}
 		}
 
-		if(msg.Signals.at(i).type == 1)
+		switch(msg.Signals.at(i).type)
 		{
-			tl.lightType = PlannerHNS::GREEN_LIGHT;
-		}
-		else
-		{
+		case 1:
 			tl.lightType = PlannerHNS::RED_LIGHT;
+			break;
+		case 2:
+			tl.lightType = PlannerHNS::GREEN_LIGHT;
+			break;
+		case 3:
+			tl.lightType = PlannerHNS::YELLOW_LIGHT; //r = g = 1
+			break;
+		case 4:
+			tl.lightType = PlannerHNS::CROSS_RED;
+			break;
+		case 5:
+			tl.lightType = PlannerHNS::CROSS_GREEN;
+			break;
+		default:
+			tl.lightType = PlannerHNS::UNKNOWN_LIGHT;
+			break;
 		}
 
 		simulatedLights.push_back(tl);
@@ -700,17 +713,10 @@ void BehaviorGen::MainLoop()
 
 		if(bNewCurrentPos && m_GlobalPaths.size()>0)
 		{
-			if(bNewLightSignal)
-			{
-				m_PrevTrafficLight = m_CurrTrafficLight;
-				bNewLightSignal = false;
-			}
 
-			if(bNewLightStatus)
+			for(auto& x: m_CurrTrafficLight)
 			{
-				bNewLightStatus = false;
-				for(unsigned int itls = 0 ; itls < m_PrevTrafficLight.size() ; itls++)
-					m_PrevTrafficLight.at(itls).lightType = m_CurrLightStatus;
+				x.lightType = m_CurrLightStatus;
 			}
 
 			// just for CARLA 
