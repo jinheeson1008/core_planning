@@ -40,6 +40,8 @@ protected:
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::WayPoint m_InitPos;
 	bool bInitPos;
+	bool bEnableSmoothGlobalPathForCARLA;
+	bool bEnableVisualizeGlobalPathForCARLA;
 
 	PlannerHNS::WayPoint m_CurrentPos;
 	bool bNewCurrentPos;

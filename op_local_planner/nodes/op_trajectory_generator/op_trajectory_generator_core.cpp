@@ -27,6 +27,8 @@ TrajectoryGen::TrajectoryGen()
 	bNewCurrentPos = false;
 	bVehicleStatus = false;
 	bWayGlobalPath = false;
+	bEnableSmoothGlobalPathForCARLA = false;
+	bEnableVisualizeGlobalPathForCARLA = false;
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
@@ -223,6 +225,7 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
 		{
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), m_temp_path);
+			//PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
 
 			m_GlobalPaths.push_back(m_temp_path);
 
@@ -234,18 +237,28 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 
 		if(!bOldGlobalPath)
 		{
-			bWayGlobalPath = true;
-			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+			if(bEnableSmoothGlobalPathForCARLA)
 			{
-				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
-				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
-				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
-				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
-				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
-				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
-				m_prev_index.push_back(0);
+				for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+				{
+					PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+				}
+			}
+			else
+			{
+				for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+				{
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+				}
 			}
 
+			m_prev_index.push_back(0);
+			bWayGlobalPath = true;
 			std::cout << "Received New Global Path Generator ! " << std::endl;
 		}
 		else
@@ -253,25 +266,29 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 			m_GlobalPaths.clear();
 		}
 
-		autoware_msgs::LaneArray lane_array;
-		visualization_msgs::MarkerArray pathsToVisualize;
 
-		for(unsigned int i=0; i < m_GlobalPaths.size(); i++)
+		if(bEnableVisualizeGlobalPathForCARLA)
 		{
-			autoware_msgs::Lane lane;
-			PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_GlobalPaths.at(i), lane);
-			lane_array.lanes.push_back(lane);
-		}
+			autoware_msgs::LaneArray lane_array;
+			visualization_msgs::MarkerArray pathsToVisualize;
 
-		std_msgs::ColorRGBA total_color;
-		total_color.r = 0;
-		total_color.g = 0.7;
-		total_color.b = 1.0;
-		total_color.a = 0.6;
-		PlannerHNS::ROSHelpers::createGlobalLaneArrayMarker(total_color, lane_array, pathsToVisualize);
-		PlannerHNS::ROSHelpers::createGlobalLaneArrayOrientationMarker(lane_array, pathsToVisualize);
-		PlannerHNS::ROSHelpers::createGlobalLaneArrayVelocityMarker(lane_array, pathsToVisualize);
-		pub_PathsRviz.publish(pathsToVisualize);
+			for(unsigned int i=0; i < m_GlobalPaths.size(); i++)
+			{
+				autoware_msgs::Lane lane;
+				PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_GlobalPaths.at(i), lane);
+				lane_array.lanes.push_back(lane);
+			}
+
+			std_msgs::ColorRGBA total_color;
+			total_color.r = 0;
+			total_color.g = 0.7;
+			total_color.b = 1.0;
+			total_color.a = 0.6;
+			PlannerHNS::ROSHelpers::createGlobalLaneArrayMarker(total_color, lane_array, pathsToVisualize);
+			PlannerHNS::ROSHelpers::createGlobalLaneArrayOrientationMarker(lane_array, pathsToVisualize);
+			PlannerHNS::ROSHelpers::createGlobalLaneArrayVelocityMarker(lane_array, pathsToVisualize);
+			pub_PathsRviz.publish(pathsToVisualize);
+		}
 	}
 }
 
