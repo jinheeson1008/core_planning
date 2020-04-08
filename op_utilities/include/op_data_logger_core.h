@@ -80,6 +80,11 @@ protected:
 	PlannerHNS::RoadNetwork m_Map;
 	bool bMap;
 	int m_iSimuCarsNumber;
+	bool m_bLightAndSignsLog;
+	bool m_bPredictionLog;
+	bool m_bTrackingLog;
+	bool m_ControlLog;
+	std::string m_ExperimentName;
 
 	std::vector<std::vector<std::string> >  m_LogData;
 

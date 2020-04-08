@@ -30,6 +30,11 @@ OpenPlannerDataLogger::OpenPlannerDataLogger()
 {
 	bMap = false;
 	m_iSimuCarsNumber = 5;
+	m_bLightAndSignsLog = false;
+	m_bPredictionLog = false;
+	m_bTrackingLog = false;
+	m_ControlLog = false;
+	m_ExperimentName = "";
 
 	std::string first_str, second_str;
 	ros::NodeHandle _nh("~");
@@ -57,6 +62,7 @@ OpenPlannerDataLogger::OpenPlannerDataLogger()
 	}
 
 	_nh.getParam("mapFileName" , m_MapPath);
+	_nh.getParam("experimentName" , m_ExperimentName);
 
 	UtilityHNS::UtilityH::GetTickCount(m_Timer);
 
