@@ -81,7 +81,7 @@ void OpenPlannerSimulatorPerception::callbackGetRvizPoint(const geometry_msgs::P
 {
 	tf::StampedTransform transform;
 	tf::TransformListener tf_listener;
-	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
+	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
 
 	geometry_msgs::Pose point;
 	point.position.x = msg->point.x + transform.getOrigin().x();

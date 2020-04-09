@@ -33,7 +33,7 @@ GlobalPlanner::GlobalPlanner()
 
 	tf::StampedTransform transform;
 	tf::TransformListener tf_listener;
-	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
+	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
@@ -53,7 +53,9 @@ GlobalPlanner::GlobalPlanner()
 
 	UtilityHNS::DataRW::CreateLoggingMainFolder();
 	if(m_params.exprimentName.size() > 1)
+	{
 		UtilityHNS::DataRW::CreateExperimentFolder(m_params.exprimentName);
+	}
 
 	nh.getParam("/op_global_planner/enableReplan" , m_params.bEnableReplanning);
 	nh.getParam("/op_global_planner/enableDynamicMapUpdate" , m_params.bEnableDynamicMapUpdate);

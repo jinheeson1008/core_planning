@@ -58,6 +58,7 @@ protected:
 	std::vector<PlannerHNS::WayPoint> t_centerTrajectorySmoothed;
 	bool bWayGlobalPath;
 	bool bWayGlobalPathToUse;
+	bool bEnableSmoothGlobalPathForCARLA;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GeneratedRollOuts;
 	bool bRollOuts;
 

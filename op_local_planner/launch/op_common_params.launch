@@ -49,7 +49,7 @@
 	<arg name="vel_odom_topic"				default="/carla/ego_vehicle/odometry" />
 	<arg name="vel_curr_topic"				default="/current_velocity" />
 	<arg name="vel_can_topic"				default="/can_info" />		
-	<arg name="experimentName" 				default="" />		
+	<arg name="experimentName" 				default="TLRTEST" />		
 	
 	<arg name="objects_input_topic" 		default="/detection/object_tracker/objects" />
 

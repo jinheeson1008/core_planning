@@ -35,17 +35,19 @@ BehaviorGen::BehaviorGen()
 	bBestCost = false;
 	bMap = false;
 	bRollOuts = false;
+	m_bEnableSpecialCARLACode = false;
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
 
 	tf::StampedTransform transform;
 	tf::TransformListener tf_listener;
-	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
+	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
 
+	pub_TotalLocalPath = nh.advertise<autoware_msgs::Lane>("op_local_selected_trajectory", 1,true);
 	pub_LocalPath = nh.advertise<autoware_msgs::Lane>("final_waypoints", 1,true);
 	pub_LocalBasePath = nh.advertise<autoware_msgs::Lane>("base_waypoints", 1,true);
 	pub_ClosestIndex = nh.advertise<std_msgs::Int32>("closest_waypoint", 1,true);
@@ -55,9 +57,27 @@ BehaviorGen::BehaviorGen()
 	pub_SelectedPathRviz = nh.advertise<visualization_msgs::MarkerArray>("local_selected_trajectory_rviz", 1);
 	pub_TargetSpeedRviz = nh.advertise<std_msgs::Float32>("op_target_velocity_rviz", 1);
 	pub_ActualSpeedRviz = nh.advertise<std_msgs::Float32>("op_actual_velocity_rviz", 1);
+	pub_DetectedLight = nh.advertise<autoware_msgs::ExtractedPosition>("op_detected_light", 1);
 
+	//Path Planning Section
+	//----------------------------
+	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &BehaviorGen::callbackGetGlobalPlannerPath, this);
+	sub_LocalPlannerPaths = nh.subscribe("/local_weighted_trajectories", 1, &BehaviorGen::callbackGetLocalPlannerPath, this);
+	sub_Trajectory_Cost = nh.subscribe("/local_trajectory_cost", 1, &BehaviorGen::callbackGetLocalTrajectoryCost, this);
+	//----------------------------
+
+	//Traffic Information Section
+	//----------------------------
+	sub_TrafficLightStatus = nh.subscribe("/light_color", 1, &BehaviorGen::callbackGetTrafficLightStatus, this);
+	sub_TrafficLightSignals	= nh.subscribe("/roi_signal", 1, &BehaviorGen::callbackGetTrafficLightSignals, this);
+	//----------------------------
+
+	// Control Topics Sections
+	//----------------------------
 	sub_current_pose = nh.subscribe("/current_pose", 1,	&BehaviorGen::callbackGetCurrentPose, this);
-
+	sub_twist_raw = nh.subscribe("/twist_raw", 1, &BehaviorGen::callbackGetTwistRaw, this);
+	sub_twist_cmd = nh.subscribe("/twist_cmd", 1, &BehaviorGen::callbackGetTwistCMD, this);
+	//sub_ctrl_cmd = nh.subscribe("/ctrl_cmd", 1, &BehaviorGen::callbackGetCommandCMD, this);
 	int bVelSource = 1;
 	_nh.getParam("/op_common_params/velocitySource", bVelSource);
 	if(bVelSource == 0)
@@ -66,16 +86,8 @@ BehaviorGen::BehaviorGen()
 		sub_current_velocity = nh.subscribe("/current_velocity", 1, &BehaviorGen::callbackGetVehicleStatus, this);
 	else if(bVelSource == 2)
 		sub_can_info = nh.subscribe("/can_info", 1, &BehaviorGen::callbackGetCANInfo, this);
+	//----------------------------
 
-	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &BehaviorGen::callbackGetGlobalPlannerPath, this);
-	sub_LocalPlannerPaths = nh.subscribe("/local_weighted_trajectories", 1, &BehaviorGen::callbackGetLocalPlannerPath, this);
-	sub_TrafficLightStatus = nh.subscribe("/light_color", 1, &BehaviorGen::callbackGetTrafficLightStatus, this);
-	sub_TrafficLightSignals	= nh.subscribe("/roi_signal", 1, &BehaviorGen::callbackGetTrafficLightSignals, this);
-	sub_Trajectory_Cost = nh.subscribe("/local_trajectory_cost", 1, &BehaviorGen::callbackGetLocalTrajectoryCost, this);
-
-	sub_twist_raw = nh.subscribe("/twist_raw", 1, &BehaviorGen::callbackGetTwistRaw, this);
-	sub_twist_cmd = nh.subscribe("/twist_cmd", 1, &BehaviorGen::callbackGetTwistCMD, this);
-	//sub_ctrl_cmd = nh.subscribe("/ctrl_cmd", 1, &BehaviorGen::callbackGetCommandCMD, this);
 
 	//Mapping Section
 	if(m_MapType == PlannerHNS::MAP_AUTOWARE)
@@ -100,6 +112,7 @@ BehaviorGen::BehaviorGen()
 
 BehaviorGen::~BehaviorGen()
 {
+#ifdef LOG_LOCAL_PLANNING_DATA
 	std::ostringstream fileName;
 	if(m_ExperimentFolderName.size() == 0)
 		fileName << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::StatesLogFolderName;
@@ -110,6 +123,7 @@ BehaviorGen::~BehaviorGen()
 				"time,dt, Behavior_i, Behavior_str, RollOuts_n, Blocked_i, Central_i, Selected_i, StopSign_id, Light_id, Stop_Dist, Follow_Dist, Follow_Vel,"
 				"Target_Vel, PID_Vel, T_cmd_Vel, C_cmd_Vel, Vel, Steer, X, Y, Z, Theta,"
 				, m_LogData);
+#endif
 }
 
 void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
@@ -187,10 +201,10 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	}
 
 	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
-	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
 	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
 
 
+	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
 	if(m_ExperimentFolderName.size() > 0)
 	{
 		if(m_ExperimentFolderName.at(m_ExperimentFolderName.size()-1) != '/')
@@ -199,7 +213,9 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	UtilityHNS::DataRW::CreateLoggingMainFolder();
 	if(m_ExperimentFolderName.size() > 1)
+	{
 		UtilityHNS::DataRW::CreateExperimentFolder(m_ExperimentFolderName);
+	}
 
 	//std::cout << "nReliableCount: " << m_PlanningParams.nReliableCount << std::endl;
 
@@ -208,6 +224,8 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 }
 
+// Control Topics Sections
+//----------------------------
 void BehaviorGen::callbackGetTwistRaw(const geometry_msgs::TwistStampedConstPtr& msg)
 {
 	m_Twist_raw = *msg;
@@ -258,7 +276,10 @@ void BehaviorGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }
+//----------------------------
 
+//Path Planning Section
+//----------------------------
 void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
 	if(msg->lanes.size() > 0)
@@ -322,7 +343,7 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
 				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.35, 0.4, 0.05);
 				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
-
+#ifdef LOG_LOCAL_PLANNING_DATA
 				std::ostringstream str_out;
 				str_out << UtilityHNS::UtilityH::GetHomeDirectory();
 				if(m_ExperimentFolderName.size() == 0)
@@ -335,7 +356,7 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 				str_out << i;
 				str_out << "_";
 				PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_GlobalPaths.at(i));
-
+#endif
 			}
 
 			std::cout << "Received New Global Path Selector! " << std::endl;
@@ -374,17 +395,20 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayCons
 				globalPathId_roll_outs = path.at(0).gid;
 		}
 
-// For CARLA challenge 
-//		if(m_RollOuts.size() > 1)
-//		{
-//			m_PlanningParams.enableSwerving = true;
-//			m_PlanningParams.rollOutNumber = m_RollOuts.size() - 1;
-//		}
-//		else
-//		{
-//			m_PlanningParams.enableSwerving = false;
-//			m_PlanningParams.rollOutNumber = 0;
-//		}
+		// For CARLA challenge
+		if(m_bEnableSpecialCARLACode)
+		{
+			if(m_RollOuts.size() > 1)
+			{
+				m_PlanningParams.enableSwerving = true;
+				m_PlanningParams.rollOutNumber = m_RollOuts.size() - 1;
+			}
+			else
+			{
+				m_PlanningParams.enableSwerving = false;
+				m_PlanningParams.rollOutNumber = 0;
+			}
+		}
 
 		if(bWayGlobalPath && m_GlobalPaths.size() > 0)
 		{
@@ -407,7 +431,10 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayCons
 		bRollOuts = true;
 	}
 }
+//----------------------------
 
+//Traffic Information Section
+//----------------------------
 void BehaviorGen::callbackGetTrafficLightStatus(const autoware_msgs::TrafficLight& msg)
 {
 	std::cout << "Received Traffic Light Status : " << msg.traffic_light << std::endl;
@@ -479,6 +506,7 @@ void BehaviorGen::callbackGetTrafficLightSignals(const autoware_msgs::Signals& m
 //		}
 //	}
 }
+//----------------------------
 
 void BehaviorGen::VisualizeLocalPlanner()
 {
@@ -570,14 +598,33 @@ void BehaviorGen::SendLocalPlanningTopics()
 	pub_ClosestIndex.publish(closest_waypoint);
 	pub_LocalBasePath.publish(m_CurrentTrajectoryToSend);
 	pub_LocalPath.publish(m_CurrentTrajectoryToSend);
+
+	if(m_CurrentBehavior.bNewPlan)
+	{
+		autoware_msgs::Lane totalTrajectory;
+		PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_BehaviorGenerator.m_Path, totalTrajectory, 0);
+		pub_TotalLocalPath.publish(totalTrajectory);
+	}
+
+	autoware_msgs::ExtractedPosition _signal;
+
+	_signal.signalId  = m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentTrafficLightID;
+	if(m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->bTrafficIsRed)
+		_signal.type = PlannerHNS::RED_LIGHT;
+	else
+		_signal.type = PlannerHNS::GREEN_LIGHT;
+	pub_DetectedLight.publish(_signal);
 }
 
 void BehaviorGen::LogLocalPlanningInfo(double dt)
 {
 	//just for carla
-	int curr_lucky_index = 0;
-	if(m_BehaviorGenerator.m_prev_index.size() > 0)
-		curr_lucky_index = m_BehaviorGenerator.m_prev_index.at(0);
+	if(m_bEnableSpecialCARLACode)
+	{
+		int curr_lucky_index = 0;
+		if(m_BehaviorGenerator.m_prev_index.size() > 0)
+			curr_lucky_index = m_BehaviorGenerator.m_prev_index.at(0);
+	}
 
 	timespec log_t;
 	UtilityHNS::UtilityH::GetTickCount(log_t);
@@ -586,8 +633,8 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 			m_BehaviorGenerator.m_pCurrentBehaviorState->m_pParams->rollOutNumber << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->bFullyBlock << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCentralTrajectory << "," <<
-			//m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCurrSafeTrajectory << "," << // only for carla
-			curr_lucky_index << "," <<// only for carla
+			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->iCurrSafeTrajectory << "," <<
+			//curr_lucky_index << "," <<// only for carla
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentStopSignID << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->currentTrafficLightID << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->minStoppingDistance << "," <<
@@ -615,25 +662,6 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 		str_out << "Local_Trajectory_";
 		PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_BehaviorGenerator.m_Path);
 	}
-// disabled for CARLA 
-//	if(bWayGlobalPathLogs)
-//	{
-//		for(unsigned int i=0; i < m_GlobalPaths.size(); i++)
-//		{
-//			std::ostringstream str_out;
-//			str_out << UtilityHNS::UtilityH::GetHomeDirectory();
-//			if(m_ExperimentFolderName.size() == 0)
-//				str_out << UtilityHNS::DataRW::LoggingMainfolderName;
-//			else
-//				str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentFolderName;
-//			str_out << UtilityHNS::DataRW::PathLogFolderName;
-//			str_out << "Global_Path_";
-//			str_out << i;
-//			str_out << "_";
-//			PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_GlobalPaths.at(i));
-//		}
-//		bWayGlobalPathLogs = false;
-//	}
 }
 
 void BehaviorGen::MainLoop()
@@ -720,12 +748,17 @@ void BehaviorGen::MainLoop()
 			}
 
 			// just for CARLA 
-			//m_BehaviorGenerator.UpdateAvoidanceParams(m_PlanningParams.enableSwerving, m_PlanningParams.rollOutNumber);
+			if(m_bEnableSpecialCARLACode)
+			{
+				m_BehaviorGenerator.UpdateAvoidanceParams(m_PlanningParams.enableSwerving, m_PlanningParams.rollOutNumber);
+			}
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
 			SendLocalPlanningTopics();
 			VisualizeLocalPlanner();
+#ifdef LOG_LOCAL_PLANNING_DATA
 			LogLocalPlanningInfo(dt);
+#endif
 		}
 		else
 			sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 	1,		&BehaviorGen::callbackGetGlobalPlannerPath, 	this);
@@ -733,9 +766,10 @@ void BehaviorGen::MainLoop()
 		loop_rate.sleep();
 	}
 }
+//----------------------------
 
 //Mapping Section
-
+//----------------------------
 void BehaviorGen::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
 {
 	PlannerHNS::Lanelet2MapLoader map_loader;
@@ -840,4 +874,6 @@ void BehaviorGen::callbackGetVMNodes(const vector_map_msgs::NodeArray& msg)
 	if(m_MapRaw.pNodes == nullptr)
 		m_MapRaw.pNodes = new UtilityHNS::AisanNodesFileReader(msg);
 }
+//----------------------------
+
 }

@@ -35,7 +35,7 @@ TrajectoryGen::TrajectoryGen()
 
 	tf::StampedTransform transform;
 	tf::TransformListener tf_listener;
-	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
+	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
@@ -225,7 +225,6 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
 		{
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), m_temp_path);
-			//PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
 
 			m_GlobalPaths.push_back(m_temp_path);
 

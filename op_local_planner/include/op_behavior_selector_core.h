@@ -51,6 +51,7 @@
 #include "op_planner/DecisionMaker.h"
 #include "op_utility/DataRW.h"
 
+#define _LOG_LOCAL_PLANNING_DATA
 
 namespace BehaviorGeneratorNS
 {
@@ -62,6 +63,7 @@ protected: //Planning Related variables
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::WayPoint m_CurrentPos;
 	bool bNewCurrentPos;
+	bool m_bEnableSpecialCARLACode;
 
 	PlannerHNS::VehicleState m_VehicleStatus;
 	bool bVehicleStatus;
@@ -86,7 +88,7 @@ protected: //Planning Related variables
 	PlannerHNS::DecisionMaker m_BehaviorGenerator;
 	PlannerHNS::BehaviorState m_CurrentBehavior;
 
-  	std::vector<std::string>    m_LogData;
+  	std::vector<std::string> m_LogData;
 
   	PlannerHNS::PlanningParams m_PlanningParams;
   	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
@@ -108,6 +110,7 @@ protected: //Planning Related variables
 	ros::NodeHandle nh;
 
 	//define publishers
+	ros::Publisher pub_TotalLocalPath;
 	ros::Publisher pub_LocalPath;
 	ros::Publisher pub_LocalBasePath;
 	ros::Publisher pub_ClosestIndex;
@@ -116,6 +119,7 @@ protected: //Planning Related variables
 	ros::Publisher pub_SelectedPathRviz;
 	ros::Publisher pub_TargetSpeedRviz;
 	ros::Publisher pub_ActualSpeedRviz;
+	ros::Publisher pub_DetectedLight;
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;
@@ -124,29 +128,38 @@ protected: //Planning Related variables
 	ros::Subscriber sub_can_info;
 	ros::Subscriber sub_GlobalPlannerPaths;
 	ros::Subscriber sub_LocalPlannerPaths;
+	ros::Subscriber sub_Trajectory_Cost;
 	ros::Subscriber sub_TrafficLightStatus;
 	ros::Subscriber sub_TrafficLightSignals;
-	ros::Subscriber sub_Trajectory_Cost;
 	ros::Publisher pub_BehaviorStateRviz;
 
 	ros::Subscriber sub_twist_cmd;
 	ros::Subscriber sub_twist_raw;
 	ros::Subscriber sub_ctrl_cmd;
 
-	// Callback function for subscriber.
+	// Control Topics Sections
+	//----------------------------
+	void callbackGetTwistRaw(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetTwistCMD(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetCommandCMD(const autoware_msgs::ControlCommandConstPtr& msg);
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
 	void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
 	void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
 	void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
+	//----------------------------
+
+	//Path Planning Section
+	//----------------------------
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalTrajectoryCost(const autoware_msgs::LaneConstPtr& msg);
+	//----------------------------
+
+	//Traffic Information Section
+	//----------------------------
 	void callbackGetTrafficLightStatus(const autoware_msgs::TrafficLight & msg);
 	void callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg);
-
-	void callbackGetTwistCMD(const geometry_msgs::TwistStampedConstPtr& msg);
-	void callbackGetTwistRaw(const geometry_msgs::TwistStampedConstPtr& msg);
-	void callbackGetCommandCMD(const autoware_msgs::ControlCommandConstPtr& msg);
+	//----------------------------
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);
@@ -160,7 +173,7 @@ public:
   void MainLoop();
 
 	//Mapping Section
-
+  //----------------------------
 	UtilityHNS::MapRaw m_MapRaw;
 	ros::Subscriber sub_bin_map;
 	ros::Subscriber sub_lanes;
@@ -194,6 +207,7 @@ public:
 	void callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg);
 	void callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg);
 	void callbackGetVMNodes(const vector_map_msgs::NodeArray& msg);
+	//----------------------------
 };
 
 }

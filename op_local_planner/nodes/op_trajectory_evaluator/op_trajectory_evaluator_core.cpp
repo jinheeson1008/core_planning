@@ -28,13 +28,14 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 	bWayGlobalPath = false;
 	bWayGlobalPathToUse = false;
 	m_bUseMoveingObjectsPrediction = false;
+	bEnableSmoothGlobalPathForCARLA = false;
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
 
 	tf::StampedTransform transform;
 	tf::TransformListener tf_listener;
-	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
+	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
@@ -112,18 +113,6 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/maxDeceleration", m_CarInfo.max_deceleration);
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
 	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
-
-	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
-	if(m_ExperimentFolderName.size() > 0)
-	{
-		if(m_ExperimentFolderName.at(m_ExperimentFolderName.size()-1) != '/')
-			m_ExperimentFolderName.push_back('/');
-	}
-
-	UtilityHNS::DataRW::CreateLoggingMainFolder();
-	if(m_ExperimentFolderName.size() > 1)
-		UtilityHNS::DataRW::CreateExperimentFolder(m_ExperimentFolderName);
-
 }
 
 void TrajectoryEvalCore::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
@@ -184,19 +173,29 @@ void TrajectoryEvalCore::callbackGetGlobalPlannerPath(const autoware_msgs::LaneA
 
 		if(!bOldGlobalPath)
 		{
-			bWayGlobalPath = true;
-			// for CARLA challenge 
-			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+			if(bEnableSmoothGlobalPathForCARLA)
 			{
-				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
-				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
-				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
-				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
-				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
-				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
-				m_prev_index.push_back(0);
+				for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+				{
+					PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+				}
 			}
-			std::cout << "Received New Global Path Evaluator! " << std::endl;
+			else
+			{
+				for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+				{
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+				}
+			}
+
+			m_prev_index.push_back(0);
+			bWayGlobalPath = true;
+			std::cout << "Received New Global Path Evaluator ! " << std::endl;
 		}
 		else
 		{

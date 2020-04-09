@@ -40,7 +40,7 @@ MotionPrediction::MotionPrediction()
 
 	tf::StampedTransform transform;
 	tf::TransformListener tf_listener;
-	PlannerHNS::ROSHelpers::getTransformFromTF("map", "world", tf_listener, transform);
+	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
@@ -166,22 +166,20 @@ void MotionPrediction::UpdatePlanningParams(ros::NodeHandle& _nh)
 			m_Map.origin.pos.alt = atof(lat_lon_alt.at(2).c_str());
 		}
 	}
-
 	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
+
+	_nh.getParam("/op_common_params/objects_input_topic" , m_TrackedObjectsTopicName);
 	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
 	if(m_ExperimentFolderName.size() > 0)
 	{
 		if(m_ExperimentFolderName.at(m_ExperimentFolderName.size()-1) != '/')
 			m_ExperimentFolderName.push_back('/');
 	}
-
-	_nh.getParam("/op_common_params/objects_input_topic" , m_TrackedObjectsTopicName);
-
 	UtilityHNS::DataRW::CreateLoggingMainFolder();
 	if(m_ExperimentFolderName.size() > 1)
+	{
 		UtilityHNS::DataRW::CreateExperimentFolder(m_ExperimentFolderName);
-
-
+	}
 
 	_nh.getParam("/op_motion_predictor/enableGenrateBranches" , m_PredictBeh.m_bGenerateBranches);
 	_nh.getParam("/op_motion_predictor/max_distance_to_lane" , m_PredictBeh.m_MaxLaneDetectionDistance);
@@ -498,37 +496,6 @@ void MotionPrediction::MainLoop()
 				PlannerHNS::VectorMapLoader vec_loader;
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
 			}
-
-//			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;
-//			if(m_MapRaw.GetVersion()==2)
-//			{
-//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessageV2(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
-//						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, m_bEnableCurbObstacles);
-//
-//				if(m_Map.roadSegments.size() > 0)
-//				{
-//					bMap = true;
-//					std::cout << " ******* Map V2 Is Loaded successfully from the Motion Predictor !! " << std::endl;
-//				}
-//			}
-//			else if(m_MapRaw.GetVersion()==1)
-//			{
-//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr,  PlannerHNS::GPSPoint(), m_Map, true, m_PlanningParams.enableLaneChange, m_bEnableCurbObstacles);
-//
-//				if(m_Map.roadSegments.size() > 0)
-//				{
-//					bMap = true;
-//					std::cout << " ******* Map V1 Is Loaded successfully from the Motion Predictor !! " << std::endl;
-//				}
-//			}
 		}
 
 		if(UtilityHNS::UtilityH::GetTimeDiffNow(m_VisualizationTimer) > m_VisualizationTime)

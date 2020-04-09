@@ -32,15 +32,170 @@ OpenPlannerDataLogger::OpenPlannerDataLogger()
 	m_iSimuCarsNumber = 5;
 	m_bLightAndSignsLog = false;
 	m_bPredictionLog = false;
-	m_bTrackingLog = false;
-	m_ControlLog = false;
+	m_bControlLog = false;
+	m_bSimulatedCars = false;
 	m_ExperimentName = "";
 
-	std::string first_str, second_str;
 	ros::NodeHandle _nh("~");
+	UpdatePlanningParams(_nh);
+
+	UtilityHNS::UtilityH::GetTickCount(m_Timer);
+
+	sub_behavior_state 		= nh.subscribe("/current_behavior",	10,  &OpenPlannerDataLogger::callbackGetBehaviorState, 	this);
+	sub_current_pose = nh.subscribe("/current_pose", 1,	&OpenPlannerDataLogger::callbackGetCurrentPose, this);
+	sub_twist_raw = nh.subscribe("/twist_raw", 1, &OpenPlannerDataLogger::callbackGetTwistRaw, this);
+	sub_twist_cmd = nh.subscribe("/twist_cmd", 1, &OpenPlannerDataLogger::callbackGetTwistCMD, this);
+	//sub_ctrl_cmd = nh.subscribe("/ctrl_cmd", 1, &BehaviorGen::callbackGetCommandCMD, this);
+	int bVelSource = 1;
+	_nh.getParam("/op_common_params/velocitySource", bVelSource);
+	if(bVelSource == 0)
+		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 1, &OpenPlannerDataLogger::callbackGetRobotOdom, this);
+	else if(bVelSource == 1)
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &OpenPlannerDataLogger::callbackGetVehicleStatus, this);
+	else if(bVelSource == 2)
+		sub_can_info = nh.subscribe("/can_info", 1, &OpenPlannerDataLogger::callbackGetCANInfo, this);
+
+	//Prediction Section
+	//----------------------------
+	if(m_bPredictionLog)
+	{
+		sub_predicted_objects = nh.subscribe("/predicted_objects", 1, &OpenPlannerDataLogger::callbackGetPredictedObjects, this);
+	}
+	//----------------------------
+
+	//Traffic Information Section
+	//----------------------------
+	if(m_bLightAndSignsLog)
+	{
+		sub_TrafficLightStatus = nh.subscribe("/light_color", 1, &OpenPlannerDataLogger::callbackGetTrafficLightStatus, this);
+		sub_TrafficLightSignals	= nh.subscribe("/roi_signal", 1, &OpenPlannerDataLogger::callbackGetTrafficLightSignals, this);
+		sub_OpTrafficLightSignal = nh.subscribe("/op_detected_light", 1, &OpenPlannerDataLogger::callbackGetOpenPlannerTrafficLightSignal, this);
+	}
+	//----------------------------
+
+	//Path Planning Section
+	//----------------------------
+	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &OpenPlannerDataLogger::callbackGetGlobalPlannerPath, this);
+	sub_LocalPlannerPaths = nh.subscribe("/op_local_selected_trajectory", 1, &OpenPlannerDataLogger::callbackGetLocalPlannerPath, this);
+	sub_Trajectory_Cost = nh.subscribe("/local_trajectory_cost", 1, &OpenPlannerDataLogger::callbackGetLocalTrajectoryCost, this);
+	//----------------------------
+
+	//Subscriptions for the simulated cars
+	if(m_bSimulatedCars)
+	{
+		std::cout << "Logging Simulated Cars Enabled" << std::endl;
+		VehicleDataContainer vc;
+		vc.id = 0;
+		m_SimulatedVehicle.push_back(vc);
+		for(int i=1; i <= m_iSimuCarsNumber; i++)
+		{
+			std::ostringstream str_path_beh, str_pose;
+			str_path_beh << "simu_car_path_beh_" << i;
+
+			ros::Subscriber _sub_path_beh;
+			_sub_path_beh =  nh.subscribe(str_path_beh.str(), 1, &OpenPlannerDataLogger::callbackGetSimuCarsPathAndState, this);
+
+			sub_simu_paths.push_back(_sub_path_beh);
+
+			str_pose << "sim_box_pose_" << i;
+			ros::Subscriber _sub;
+			_sub =  nh.subscribe(str_pose.str(), 1, &OpenPlannerDataLogger::callbackGetSimuPose, this);
+			sub_objs.push_back(_sub);
+
+			vc.id = i;
+			m_SimulatedVehicle.push_back(vc);
+			m_SimulationLogData.push_back(std::vector<std::string>());
+		}
+	}
+
+	std::cout << "OpenPlannerDataLogger initialized successfully " << std::endl;
+}
+
+OpenPlannerDataLogger::~OpenPlannerDataLogger()
+{
+	std::ostringstream fileName;
+	if(m_ExperimentName.size() == 0)
+		fileName << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName;
+	else
+		fileName << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentName;
+
+	if(m_bSimulatedCars)
+	{
+		for(int i=0; i < m_iSimuCarsNumber; i++)
+		{
+			ostringstream car_name;
+			car_name << "sim_car_no_" << i+1;
+			car_name << "_";
+			UtilityHNS::DataRW::WriteLogData(fileName.str()+UtilityHNS::DataRW::PredictionFolderName,
+					car_name.str(),
+					"time_diff,distance_diff, heading_diff, velocity_diff, rms, state_diff," , m_SimulationLogData.at(i));
+		}
+	}
+
+	if(m_bLightAndSignsLog)
+	{
+		UtilityHNS::DataRW::WriteLogData(fileName.str() + UtilityHNS::DataRW::StatesLogFolderName, "MainLog",
+					"time, dt, Beh_State_i, Beh_State_str, DetectedLight, MapLight, MapLight_ID, Lights_n, Lights_IDs, Lights_Types, "
+					"Selected_Traj, Indicator, Follow_Dist, Follow_Vel, Max_Vel, "
+					"Velocity, Steer, X, Y, Z, Theta,"
+					, m_TrafficAndSignLogData);
+	}
+}
+
+void OpenPlannerDataLogger::UpdatePlanningParams(ros::NodeHandle& _nh)
+{
+	_nh.getParam("/op_common_params/enableSwerving", m_PlanningParams.enableSwerving);
+	if(m_PlanningParams.enableSwerving)
+		m_PlanningParams.enableFollowing = true;
+	else
+		_nh.getParam("/op_common_params/enableFollowing", m_PlanningParams.enableFollowing);
+
+	_nh.getParam("/op_common_params/enableTrafficLightBehavior", m_PlanningParams.enableTrafficLightBehavior);
+	_nh.getParam("/op_common_params/enableStopSignBehavior", m_PlanningParams.enableStopSignBehavior);
+
+	_nh.getParam("/op_common_params/maxVelocity", m_PlanningParams.maxSpeed);
+	_nh.getParam("/op_common_params/minVelocity", m_PlanningParams.minSpeed);
+	_nh.getParam("/op_common_params/maxLocalPlanDistance", m_PlanningParams.microPlanDistance);
+
+	_nh.getParam("/op_common_params/pathDensity", m_PlanningParams.pathDensity);
+
+	_nh.getParam("/op_common_params/rollOutDensity", m_PlanningParams.rollOutDensity);
+	if(m_PlanningParams.enableSwerving)
+		_nh.getParam("/op_common_params/rollOutsNumber", m_PlanningParams.rollOutNumber);
+	else
+		m_PlanningParams.rollOutNumber = 0;
+
+	_nh.getParam("/op_common_params/horizonDistance", m_PlanningParams.horizonDistance);
+	_nh.getParam("/op_common_params/minFollowingDistance", m_PlanningParams.minFollowingDistance);
+	_nh.getParam("/op_common_params/minDistanceToAvoid", m_PlanningParams.minDistanceToAvoid);
+	_nh.getParam("/op_common_params/maxDistanceToAvoid", m_PlanningParams.maxDistanceToAvoid);
+	_nh.getParam("/op_common_params/speedProfileFactor", m_PlanningParams.speedProfileFactor);
+
+	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
+	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
+
+	_nh.getParam("/op_common_params/enableLaneChange", m_PlanningParams.enableLaneChange);
+
+	_nh.getParam("/op_common_params/width", m_CarInfo.width);
+	_nh.getParam("/op_common_params/length", m_CarInfo.length);
+	_nh.getParam("/op_common_params/wheelBaseLength", m_CarInfo.wheel_base);
+	_nh.getParam("/op_common_params/turningRadius", m_CarInfo.turning_radius);
+	_nh.getParam("/op_common_params/maxSteerAngle", m_CarInfo.max_steer_angle);
+	_nh.getParam("/op_common_params/maxAcceleration", m_CarInfo.max_acceleration);
+	_nh.getParam("/op_common_params/maxDeceleration", m_CarInfo.max_deceleration);
+	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
+	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
+
+	PlannerHNS::ControllerParams controlParams;
+	controlParams.Steering_Gain = PlannerHNS::PID_CONST(0.07, 0.02, 0.01);
+	controlParams.Velocity_Gain = PlannerHNS::PID_CONST(0.1, 0.005, 0.1);
+	nh.getParam("/op_common_params/steeringDelay", controlParams.SteeringDelay);
+	nh.getParam("/op_common_params/minPursuiteDistance", controlParams.minPursuiteDistance );
+	nh.getParam("/op_common_params/additionalBrakingDistance", m_PlanningParams.additionalBrakingDistance );
+	nh.getParam("/op_common_params/giveUpDistance", m_PlanningParams.giveUpDistance );
 
 	int iSource = 0;
-	_nh.getParam("mapSource" , iSource);
+	_nh.getParam("/op_common_params/mapSource" , iSource);
 	if(iSource == 0)
 		m_MapType = PlannerHNS::MAP_AUTOWARE;
 	else if (iSource == 1)
@@ -51,7 +206,7 @@ OpenPlannerDataLogger::OpenPlannerDataLogger()
 	{
 		m_MapType = PlannerHNS::MAP_LANELET_2;
 		std::string str_origin;
-		nh.getParam("lanelet2_origin" , str_origin);
+		nh.getParam("/op_common_params/lanelet2_origin" , str_origin);
 		std::vector<std::string> lat_lon_alt = PlannerHNS::MappingHelpers::SplitString(str_origin, ",");
 		if(lat_lon_alt.size() == 3)
 		{
@@ -61,59 +216,33 @@ OpenPlannerDataLogger::OpenPlannerDataLogger()
 		}
 	}
 
-	_nh.getParam("mapFileName" , m_MapPath);
-	_nh.getParam("experimentName" , m_ExperimentName);
+	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
+	_nh.getParam("/op_data_logger/experimentName" , m_ExperimentName);
+	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
 
-	UtilityHNS::UtilityH::GetTickCount(m_Timer);
 
-	//Subscription for the Ego vehicle !
-	sub_predicted_objects = nh.subscribe("/predicted_objects", 1, &OpenPlannerDataLogger::callbackGetPredictedObjects, this);
-
-	sub_behavior_state 		= nh.subscribe("/current_behavior",	10,  &OpenPlannerDataLogger::callbackGetBehaviorState, 	this);
-
-	//Subscriptions for the simulated cars
-	VehicleDataContainer vc;
-	vc.id = 0;
-	m_SimulatedVehicle.push_back(vc);
-	for(int i=1; i <= m_iSimuCarsNumber; i++)
+	if(m_ExperimentName.size() > 0)
 	{
-		std::ostringstream str_path_beh, str_pose;
-		str_path_beh << "simu_car_path_beh_" << i;
-
-		ros::Subscriber _sub_path_beh;
-		_sub_path_beh =  nh.subscribe(str_path_beh.str(), 1, &OpenPlannerDataLogger::callbackGetSimuCarsPathAndState, this);
-
-		sub_simu_paths.push_back(_sub_path_beh);
-
-		str_pose << "sim_box_pose_" << i;
-		ros::Subscriber _sub;
-		_sub =  nh.subscribe(str_pose.str(), 1, &OpenPlannerDataLogger::callbackGetSimuPose, this);
-		sub_objs.push_back(_sub);
-
-		vc.id = i;
-		m_SimulatedVehicle.push_back(vc);
-		m_LogData.push_back(std::vector<std::string>());
+		if(m_ExperimentName.at(m_ExperimentName.size()-1) != '/')
+			m_ExperimentName.push_back('/');
 	}
 
-	std::cout << "OpenPlannerDataLogger initialized successfully " << std::endl;
-}
-
-OpenPlannerDataLogger::~OpenPlannerDataLogger()
-{
-	for(int i=0; i < m_iSimuCarsNumber; i++)
+	UtilityHNS::DataRW::CreateLoggingMainFolder();
+	if(m_ExperimentName.size() > 1)
 	{
-		ostringstream car_name;
-		car_name << "sim_car_no_" << i+1;
-		car_name << "_";
-		UtilityHNS::DataRW::WriteLogData(UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName+UtilityHNS::DataRW::PredictionFolderName,
-				car_name.str(),
-				"time_diff,distance_diff, heading_diff, velocity_diff, rms, state_diff," , m_LogData.at(i));
+		UtilityHNS::DataRW::CreateExperimentFolder(m_ExperimentName);
 	}
+
+	_nh.getParam("/op_data_logger/lightsAndSignsLog", m_bLightAndSignsLog);
+	_nh.getParam("/op_data_logger/trackingLog", m_bPredictionLog);
+	_nh.getParam("/op_data_logger/controlLog", m_bControlLog);
+	_nh.getParam("/op_data_logger/simulatedCars", m_bSimulatedCars);
 }
 
+//Simulated Vehicles Section
+//----------------------------
 void OpenPlannerDataLogger::callbackGetSimuPose(const geometry_msgs::PoseArray& msg)
 {
-
 	for(unsigned int i=0; i < m_SimulatedVehicle.size(); i++)
 	{
 		if(msg.poses.size() > 3 )
@@ -161,9 +290,10 @@ void OpenPlannerDataLogger::callbackGetSimuCarsPathAndState(const autoware_msgs:
 		}
 	}
 }
+//----------------------------
 
-//Functions related to Ego Vehicle Data
-
+//Prediction Section
+//----------------------------
 void OpenPlannerDataLogger::callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg)
 {
 	m_PredictedObjects.clear();
@@ -210,33 +340,401 @@ void OpenPlannerDataLogger::callbackGetPredictedObjects(const autoware_msgs::Det
 		}
 	}
 }
+//----------------------------
 
+//Functions related to Ego Vehicle Data
+//----------------------------
 void OpenPlannerDataLogger::callbackGetBehaviorState(const geometry_msgs::TwistStampedConstPtr& msg )
 {
 	m_CurrentBehavior = ConvertBehaviorStateFromAutowareToPlannerH(msg);
 //	std::cout << "Receive Behavior Data From Ego Vehicle... " << msg->header.stamp <<  std::endl;
 }
 
+void OpenPlannerDataLogger::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
+{
+	m_CurrentPos.pos = PlannerHNS::GPSPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
+}
+
+void OpenPlannerDataLogger::callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg)
+{
+	m_VehicleStatus.speed = msg->twist.linear.x;
+	m_CurrentPos.v = m_VehicleStatus.speed;
+
+	if(fabs(m_CurrentPos.v) > 0.1)
+		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/m_CurrentPos.v);
+	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
+}
+
+//----------------------------
+
+// Control Topics Sections
+//----------------------------
+void OpenPlannerDataLogger::callbackGetTwistRaw(const geometry_msgs::TwistStampedConstPtr& msg)
+{
+	m_Twist_raw = *msg;
+}
+
+void OpenPlannerDataLogger::callbackGetTwistCMD(const geometry_msgs::TwistStampedConstPtr& msg)
+{
+	m_Twist_cmd = *msg;
+}
+
+void OpenPlannerDataLogger::callbackGetCommandCMD(const autoware_msgs::ControlCommandConstPtr& msg)
+{
+	m_Ctrl_cmd = *msg;
+}
+
+void OpenPlannerDataLogger::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg)
+{
+	m_VehicleStatus.speed = msg->speed/3.6;
+	m_CurrentPos.v = m_VehicleStatus.speed;
+	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_steer_angle / m_CarInfo.max_steer_value;
+	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
+}
+
+void OpenPlannerDataLogger::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
+{
+	m_VehicleStatus.speed = msg->twist.twist.linear.x;
+	m_CurrentPos.v = m_VehicleStatus.speed ;
+	if(msg->twist.twist.linear.x != 0)
+		m_VehicleStatus.steer += atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
+	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
+}
+//----------------------------
+
+//Traffic Information Section
+//----------------------------
+void OpenPlannerDataLogger::callbackGetTrafficLightStatus(const autoware_msgs::TrafficLight& msg)
+{
+	//std::cout << "Received Traffic Light Status : " << msg.traffic_light << std::endl;
+	if(msg.traffic_light == 1) // green
+		m_CurrLightStatus = PlannerHNS::GREEN_LIGHT;
+	else //0 => RED , 2 => Unknown
+		m_CurrLightStatus = PlannerHNS::RED_LIGHT;
+}
+
+void OpenPlannerDataLogger::callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg)
+{
+	std::vector<PlannerHNS::TrafficLight> simulatedLights;
+	std::ostringstream dataLineIds;
+	std::ostringstream dataLineTypes;
+	for(unsigned int i = 0 ; i < msg.Signals.size() ; i++)
+	{
+		PlannerHNS::TrafficLight tl;
+		tl.id = msg.Signals.at(i).signalId;
+		dataLineIds << tl.id << " | ";
+
+		for(unsigned int k = 0; k < m_Map.trafficLights.size(); k++)
+		{
+			if(m_Map.trafficLights.at(k).id == tl.id)
+			{
+				tl.pose = m_Map.trafficLights.at(k).pose;
+				break;
+			}
+		}
+
+		switch(msg.Signals.at(i).type)
+		{
+		case 1:
+			tl.lightType = PlannerHNS::RED_LIGHT;
+			dataLineTypes << "R";
+			break;
+		case 2:
+			tl.lightType = PlannerHNS::GREEN_LIGHT;
+			dataLineTypes << "G";
+			break;
+		case 3:
+			tl.lightType = PlannerHNS::YELLOW_LIGHT; //r = g = 1
+			dataLineTypes << "Y";
+			break;
+		case 4:
+			tl.lightType = PlannerHNS::CROSS_RED;
+			dataLineTypes << "CR";
+			break;
+		case 5:
+			tl.lightType = PlannerHNS::CROSS_GREEN;
+			dataLineTypes << "CG";
+			break;
+		default:
+			tl.lightType = PlannerHNS::UNKNOWN_LIGHT;
+			dataLineTypes << "UN";
+			break;
+		}
+
+		dataLineTypes << " | ";
+		simulatedLights.push_back(tl);
+	}
+	m_CurrTrafficLightIds = dataLineIds.str();
+	m_CurrTrafficLightTypes = dataLineTypes.str();
+	//std::cout << "Received Traffic Lights : " << lights.markers.size() << std::endl;
+	m_CurrTrafficLight = simulatedLights;
+}
+
+void OpenPlannerDataLogger::callbackGetOpenPlannerTrafficLightSignal(const autoware_msgs::ExtractedPosition& msg)
+{
+	std::ostringstream dataLineTypes;
+	m_OpenPlannerDetectedLight.id = msg.signalId;
+
+
+	switch(msg.type)
+	{
+	case 1:
+		m_OpenPlannerDetectedLight.lightType = PlannerHNS::RED_LIGHT;
+		dataLineTypes << "R";
+		break;
+	case 2:
+		m_OpenPlannerDetectedLight.lightType = PlannerHNS::GREEN_LIGHT;
+		dataLineTypes << "G";
+		break;
+	case 3:
+		m_OpenPlannerDetectedLight.lightType = PlannerHNS::YELLOW_LIGHT; //r = g = 1
+		dataLineTypes << "Y";
+		break;
+	case 4:
+		m_OpenPlannerDetectedLight.lightType = PlannerHNS::CROSS_RED;
+		dataLineTypes << "CR";
+		break;
+	case 5:
+		m_OpenPlannerDetectedLight.lightType = PlannerHNS::CROSS_GREEN;
+		dataLineTypes << "CG";
+		break;
+	default:
+		m_OpenPlannerDetectedLight.lightType = PlannerHNS::UNKNOWN_LIGHT;
+		dataLineTypes << "UN";
+		break;
+	}
+
+	m_OpenPlannerLightType = dataLineTypes.str();
+}
+//----------------------------
+
+//Path Planning Section
+//----------------------------
+void OpenPlannerDataLogger::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
+{
+	if(msg->lanes.size() > 0)
+	{
+		bool bOldGlobalPath = m_GlobalPaths.size() == msg->lanes.size();
+		m_GlobalPaths.clear();
+
+		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
+		{
+			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), m_temp_path);
+
+			if(bMap)
+			{
+				PlannerHNS::Lane* pPrevValid = 0;
+				for(unsigned int j = 0 ; j < m_temp_path.size(); j++)
+				{
+					PlannerHNS::Lane* pLane = 0;
+					pLane = PlannerHNS::MappingHelpers::GetLaneById(m_temp_path.at(j).laneId, m_Map);
+					if(!pLane)
+					{
+						pLane = PlannerHNS::MappingHelpers::GetClosestLaneFromMap(m_temp_path.at(j), m_Map, 1, true);
+
+						if(!pLane && !pPrevValid)
+						{
+							ROS_ERROR("Map inconsistency between Global Path and Local Planer Map, Can't identify current lane.");
+							return;
+						}
+
+						if(!pLane)
+							m_temp_path.at(j).pLane = pPrevValid;
+						else
+						{
+							m_temp_path.at(j).pLane = pLane;
+							pPrevValid = pLane ;
+						}
+
+						m_temp_path.at(j).laneId = m_temp_path.at(j).pLane->id;
+					}
+					else
+						m_temp_path.at(j).pLane = pLane;
+
+					//std::cout << "StopLineInGlobalPath: " << m_temp_path.at(j).stopLineID << std::endl;
+				}
+			}
+
+			m_GlobalPaths.push_back(m_temp_path);
+
+			if(bOldGlobalPath)
+			{
+				bOldGlobalPath = PlannerHNS::PlanningHelpers::CompareTrajectories(m_temp_path, m_GlobalPaths.at(i));
+			}
+		}
+
+		if(!bOldGlobalPath)
+		{
+			bWayGlobalPath = true;
+			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+			{
+				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
+				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
+				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.35, 0.4, 0.05);
+				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
+
+				std::ostringstream str_out;
+				str_out << UtilityHNS::UtilityH::GetHomeDirectory();
+				if(m_ExperimentName.size() == 0)
+					str_out << UtilityHNS::DataRW::LoggingMainfolderName;
+				else
+					str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentName;
+
+				str_out << UtilityHNS::DataRW::GlobalPathLogFolderName;
+				str_out << "GlobalPath_";
+				str_out << i;
+				str_out << "_";
+				PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_GlobalPaths.at(i));
+
+			}
+
+			std::cout << "Received New Global Path Selector! " << std::endl;
+		}
+		else
+		{
+			m_GlobalPaths.clear();
+		}
+	}
+}
+
+void OpenPlannerDataLogger::callbackGetLocalTrajectoryCost(const autoware_msgs::LaneConstPtr& msg)
+{
+	m_TrajectoryBestCost.bBlocked = msg->is_blocked;
+	m_TrajectoryBestCost.index = msg->lane_index;
+	m_TrajectoryBestCost.cost = msg->cost;
+	m_TrajectoryBestCost.closest_obj_distance = msg->closest_object_distance;
+	m_TrajectoryBestCost.closest_obj_velocity = msg->closest_object_velocity;
+}
+
+void OpenPlannerDataLogger::callbackGetLocalPlannerPath(const autoware_msgs::LaneConstPtr& msg)
+{
+	PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(*msg, m_SelectedPath);
+	std::ostringstream str_out;
+	str_out << UtilityHNS::UtilityH::GetHomeDirectory();
+	if(m_ExperimentName.size() == 0)
+		str_out << UtilityHNS::DataRW::LoggingMainfolderName;
+	else
+		str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentName;
+
+	str_out << UtilityHNS::DataRW::PathLogFolderName;
+	str_out << "SelectedPath_";
+	PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_SelectedPath);
+}
+//----------------------------
+
+void OpenPlannerDataLogger::MainLoop()
+{
+	timespec planningTimer;
+	UtilityHNS::UtilityH::GetTickCount(planningTimer);
+	ros::Rate loop_rate(50);
+	while (ros::ok())
+	{
+		ros::spinOnce();
+
+		double dt  = UtilityHNS::UtilityH::GetTimeDiffNow(planningTimer);
+		UtilityHNS::UtilityH::GetTickCount(planningTimer);
+
+		if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
+		{
+			bMap = true;
+			PlannerHNS::KmlMapLoader kml_loader;
+			kml_loader.LoadKML(m_MapPath, m_Map);
+		}
+		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
+		{
+			bMap = true;
+			PlannerHNS::VectorMapLoader vec_loader;
+			vec_loader.LoadFromFile(m_MapPath, m_Map);
+		}
+		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
+		{
+			bMap = true;
+			PlannerHNS::Lanelet2MapLoader map_loader;
+			map_loader.LoadMap(m_MapPath, m_Map);
+		}
+
+		if(m_bLightAndSignsLog)
+		{
+			LogLocalTrafficInfo(dt);
+		}
+
+		if(m_bSimulatedCars)
+		{
+			ros::Time t;
+			for(unsigned int i=0; i < m_SimulatedVehicle.size(); i++)
+			{
+				if(m_SimulatedVehicle.at(i).pose_time != t && m_SimulatedVehicle.at(i).path_time != t)
+				{
+					for(unsigned int j = 0; j < m_PredictedObjects.size(); j++)
+					{
+						//std::cout << "CarID: " <<  m_SimulatedVehicle.at(i).id << ", PredCarID: " << m_PredictedObjects.at(j).id << std::endl;
+						if(m_SimulatedVehicle.at(i).id == m_PredictedObjects.at(j).id)
+						{
+							CompareAndLog(m_SimulatedVehicle.at(i), m_PredictedObjects.at(j));
+						}
+					}
+
+					//std::cout << "CarID: " <<  m_SimulatedVehicle.at(i).id << ", PoseTime: " << m_SimulatedVehicle.at(i).pose_time.toSec() << ", PredTime: " << m_pred_time.toSec() << std::endl;
+					//std::cout << std::endl;
+				}
+			}
+		}
+
+		loop_rate.sleep();
+	}
+}
+
+void OpenPlannerDataLogger::LogLocalTrafficInfo(double dt)
+{
+	timespec log_t;
+	UtilityHNS::UtilityH::GetTickCount(log_t);
+	std::ostringstream dataLine;
+	dataLine << UtilityHNS::UtilityH::GetLongTime(log_t) <<"," << dt << "," <<
+					m_CurrentBehavior.state << ","<<
+					PlannerHNS::ROSHelpers::GetBehaviorNameFromCode(m_CurrentBehavior.state) << "," <<
+					PlannerHNS::MappingHelpers::FromLightTypeToText(m_CurrLightStatus) << "," <<
+					m_OpenPlannerLightType << "," <<
+					m_OpenPlannerDetectedLight.id << "," <<
+					m_CurrTrafficLight.size() << "," <<
+					m_CurrTrafficLightIds << "," <<
+					m_CurrTrafficLightTypes << "," <<
+					m_CurrentBehavior.iTrajectory << "," <<
+					m_CurrentBehavior.indicator << "," <<
+					m_CurrentBehavior.followDistance << "," <<
+					m_CurrentBehavior.followVelocity << "," <<
+					m_CurrentBehavior.maxVelocity << "," <<
+					m_VehicleStatus.speed << "," <<
+					m_VehicleStatus.steer << "," <<
+					m_CurrentPos.pos.x << "," <<
+					m_CurrentPos.pos.y << "," <<
+					m_CurrentPos.pos.z << "," <<
+					UtilityHNS::UtilityH::SplitPositiveAngle(m_CurrentPos.pos.a)+M_PI << ",";
+	if(m_TrafficAndSignLogData.size() < 150000) //in case I forget to turn off this node .. could fill the hard drive
+	{
+		m_TrafficAndSignLogData.push_back(dataLine.str());
+	}
+}
+
+//Helper Functions
+//----------------------------
 PlannerHNS::BehaviorState OpenPlannerDataLogger::ConvertBehaviorStateFromAutowareToPlannerH(const geometry_msgs::TwistStampedConstPtr& msg)
 {
 	PlannerHNS::BehaviorState behavior;
-	behavior.followDistance 	= msg->twist.linear.x;
-	behavior.stopDistance 		= msg->twist.linear.y;
-	behavior.followVelocity 	= msg->twist.angular.x;
-	behavior.maxVelocity 		= msg->twist.angular.y;
+	behavior.bNewPlan = msg->twist.linear.x;
+	behavior.followDistance = msg->twist.linear.y;
+	behavior.followVelocity = msg->twist.linear.z;
 
-
-	if(msg->twist.linear.z == PlannerHNS::LIGHT_INDICATOR::INDICATOR_LEFT)
+	if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_LEFT)
 		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_LEFT;
-	else if(msg->twist.linear.z == PlannerHNS::LIGHT_INDICATOR::INDICATOR_RIGHT)
+	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_RIGHT)
 		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_RIGHT;
-	else if(msg->twist.linear.z == PlannerHNS::LIGHT_INDICATOR::INDICATOR_BOTH)
+	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_BOTH)
 		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_BOTH;
-	else if(msg->twist.linear.z == PlannerHNS::LIGHT_INDICATOR::INDICATOR_NONE)
+	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_NONE)
 		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_NONE;
 
-	behavior.state = GetStateFromNumber(msg->twist.angular.z);
-
+	behavior.state = GetStateFromNumber(msg->twist.angular.y);
+	behavior.iTrajectory = msg->twist.angular.z;
 
 	return behavior;
 
@@ -323,7 +821,7 @@ void OpenPlannerDataLogger::CompareAndLog(VehicleDataContainer& ground_truth, Pl
 
 	std::ostringstream dataLine;
 	dataLine << t_diff << "," << d_diff << "," <<  o_diff << "," << v_diff << "," << rms << "," << beh_state_diff << ",";
-	m_LogData.at(ground_truth.id -1).push_back(dataLine.str());
+	m_SimulationLogData.at(ground_truth.id -1).push_back(dataLine.str());
 
 	//std::cout << "Predicted Behavior: " << predicted.behavior_state << std::endl;
 }
@@ -349,58 +847,6 @@ double OpenPlannerDataLogger::CalculateRMS(std::vector<PlannerHNS::WayPoint>& pa
 	}
 
 	return rms_sum / (double)min_size;
-}
-
-void OpenPlannerDataLogger::MainLoop()
-{
-
-	ros::Rate loop_rate(50);
-
-	while (ros::ok())
-	{
-		ros::spinOnce();
-
-		if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
-		{
-			bMap = true;
-			PlannerHNS::KmlMapLoader kml_loader;
-			kml_loader.LoadKML(m_MapPath, m_Map);
-		}
-		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
-		{
-			bMap = true;
-			PlannerHNS::VectorMapLoader vec_loader;
-			vec_loader.LoadFromFile(m_MapPath, m_Map);
-		}
-		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
-		{
-			bMap = true;
-			PlannerHNS::Lanelet2MapLoader map_loader;
-			map_loader.LoadMap(m_MapPath, m_Map);
-		}
-
-		ros::Time t;
-
-		for(unsigned int i=0; i < m_SimulatedVehicle.size(); i++)
-		{
-			if(m_SimulatedVehicle.at(i).pose_time != t && m_SimulatedVehicle.at(i).path_time != t)
-			{
-				for(unsigned int j = 0; j < m_PredictedObjects.size(); j++)
-				{
-					//std::cout << "CarID: " <<  m_SimulatedVehicle.at(i).id << ", PredCarID: " << m_PredictedObjects.at(j).id << std::endl;
-					if(m_SimulatedVehicle.at(i).id == m_PredictedObjects.at(j).id)
-					{
-						CompareAndLog(m_SimulatedVehicle.at(i), m_PredictedObjects.at(j));
-					}
-				}
-
-				//std::cout << "CarID: " <<  m_SimulatedVehicle.at(i).id << ", PoseTime: " << m_SimulatedVehicle.at(i).pose_time.toSec() << ", PredTime: " << m_pred_time.toSec() << std::endl;
-				//std::cout << std::endl;
-			}
-		}
-
-		loop_rate.sleep();
-	}
 }
 
 }
