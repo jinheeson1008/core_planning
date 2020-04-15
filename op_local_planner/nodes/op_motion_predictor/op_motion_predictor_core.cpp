@@ -254,16 +254,21 @@ void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedOb
 {
 	UtilityHNS::UtilityH::GetTickCount(m_SensingTimer);
 
-	autoware_msgs::DetectedObjectArray localObjects = *msg;
+	autoware_msgs::DetectedObjectArray globalObjects;
 	std::string source_data_frame = msg->header.frame_id;
-	std::string target_tracking_frame = "map";
+	std::string target_prediction_frame = "/map";
 
-	if(source_data_frame.compare(target_tracking_frame) > 0)
+	if(source_data_frame.compare(target_prediction_frame) > 0)
 	{
 		tf::TransformListener tf_listener;
 		tf::StampedTransform local2global;
-		PlannerHNS::ROSHelpers::getTransformFromTF(source_data_frame, target_tracking_frame, tf_listener, local2global);
-		PlannerHNS::ROSHelpers::transformDetectedObjects(source_data_frame, target_tracking_frame, local2global, *msg, localObjects);
+		PlannerHNS::ROSHelpers::getTransformFromTF(source_data_frame, target_prediction_frame, tf_listener, local2global);
+		globalObjects.header = msg->header;
+		PlannerHNS::ROSHelpers::transformDetectedObjects(source_data_frame, target_prediction_frame, local2global, *msg, globalObjects);
+	}
+	else
+	{
+		globalObjects = *msg;
 	}
 
 
@@ -272,11 +277,11 @@ void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedOb
 
 	PlannerHNS::DetectedObject obj;
 
-	for(unsigned int i = 0 ; i <localObjects.objects.size(); i++)
+	for(unsigned int i = 0 ; i <globalObjects.objects.size(); i++)
 	{
-		if(localObjects.objects.at(i).id > 0)
+		if(globalObjects.objects.at(i).id > 0)
 		{
-			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(localObjects.objects.at(i), obj);
+			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(globalObjects.objects.at(i), obj);
 			m_TrackedObjects.push_back(obj);
 		}
 	}
