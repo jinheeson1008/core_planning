@@ -35,7 +35,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/OccupancyGrid.h>
-
+#include <autoware_msgs/State.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <tf/tf.h>
@@ -45,9 +45,11 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <autoware_lanelet2_msgs/MapBin.h>
 
+#include "op_planner/hmi/HMIMSG.h"
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/MappingHelpers.h"
 #include "op_planner/PlannerH.h"
+#include "op_utility/DataRW.h"
 
 namespace GlobalPlanningNS
 {
@@ -64,6 +66,7 @@ class WayPlannerParams
 public:
 	std::string KmlMapPath;
 	std::string exprimentName;
+	std::string destinationsFile;
 	bool bEnableSmoothing;
 	bool bEnableLaneChange;
 	bool bEnableHMI;
@@ -120,6 +123,7 @@ protected:
 	//ros::Publisher pub_GoalPointRviz;
 	//ros::Publisher pub_NodesListRviz;
 	ros::Publisher pub_GoalsListRviz;
+	ros::Publisher pub_hmi_mission;
 
 	ros::Subscriber sub_robot_odom;
 	ros::Subscriber sub_start_pose;
@@ -128,6 +132,7 @@ protected:
 	ros::Subscriber sub_current_velocity;
 	ros::Subscriber sub_can_info;
 	ros::Subscriber sub_road_status_occupancy;
+	ros::Subscriber sub_hmi_mission;
 
 public:
 	GlobalPlanner();
@@ -136,6 +141,7 @@ public:
 
 private:
   PlannerHNS::WayPoint* m_pCurrGoal;
+  std::vector<UtilityHNS::DestinationsDataFileReader::DestinationData> m_destinations;
 
   // Callback function for subscriber.
   void callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr &msg);
@@ -145,6 +151,11 @@ private:
   void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
   void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
   void callbackGetRoadStatusOccupancyGrid(const nav_msgs::OccupancyGridConstPtr& msg);
+  /**
+   * @brief Communication between Global Planner and HMI bridge
+   * @param msg
+   */
+  void callbackGetHMIState(const autoware_msgs::StateConstPtr& msg);
 
   protected:
   	PlannerHNS::RoadNetwork m_Map;
@@ -158,6 +169,7 @@ private:
   	void SaveSimulationData();
   	int LoadSimulationData();
   	void ClearOldCostFromMap();
+  	void LoadDestinations(const std::string& fileName, int curr_dst_id = 0);
 
 
   	//Mapping Section

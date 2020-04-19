@@ -48,6 +48,14 @@ include_directories(
 link_directories(lib)
 
 add_executable(
+  op_hmi_bridge
+  nodes/op_hmi_bridge/op_hmi_bridge.cpp
+  nodes/op_hmi_bridge/op_hmi_bridge_core.cpp
+  nodes/op_hmi_bridge/SocketServer.cpp
+)
+target_link_libraries(op_hmi_bridge ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+add_executable(
   op_pose2tf
   nodes/op_pose2tf/op_pose2tf.cpp
   nodes/op_pose2tf/op_pose2tf_core.cpp
@@ -83,6 +91,7 @@ target_link_libraries(
 )
 
 add_dependencies(
+  op_hmi_bridge
   op_pose2tf
   op_data_logger
   op_bag_player
@@ -91,6 +100,7 @@ add_dependencies(
 
 install(
   TARGETS
+    op_hmi_bridge
     op_pose2tf
     op_data_logger
     op_bag_player

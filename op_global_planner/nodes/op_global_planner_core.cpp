@@ -31,19 +31,11 @@ GlobalPlanner::GlobalPlanner()
 	m_bFirstStart = false;
 	m_GlobalPathID = 1;
 
-	tf::StampedTransform transform;
-	tf::TransformListener tf_listener;
-	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
-	m_OriginPos.position.x  = transform.getOrigin().x();
-	m_OriginPos.position.y  = transform.getOrigin().y();
-	m_OriginPos.position.z  = transform.getOrigin().z();
-
-	UtilityHNS::UtilityH::GetTickCount(m_ReplnningTimer);
-
 	nh.getParam("/op_global_planner/pathDensity" , m_params.pathDensity);
 	nh.getParam("/op_global_planner/enableSmoothing" , m_params.bEnableSmoothing);
 	nh.getParam("/op_global_planner/enableLaneChange" , m_params.bEnableLaneChange);
 	nh.getParam("/op_global_planner/enableRvizInput" , m_params.bEnableRvizInput);
+	nh.getParam("/op_global_planner/enableHMI" , m_params.bEnableHMI);
 	nh.getParam("/op_global_planner/experimentName" , m_params.exprimentName);
 	if(m_params.exprimentName.size() > 0)
 	{
@@ -88,6 +80,15 @@ GlobalPlanner::GlobalPlanner()
 	pub_MapRviz  = nh.advertise<visualization_msgs::MarkerArray>("vector_map_center_lines_rviz", 1, true);
 	pub_GoalsListRviz = nh.advertise<visualization_msgs::MarkerArray>("op_destinations_rviz", 1, true);
 
+	if(m_params.bEnableHMI)
+	{
+		sub_hmi_mission = nh.subscribe("/hmi_mission_command", 1, &GlobalPlanner::callbackGetHMIState, this);
+		pub_hmi_mission = nh.advertise<autoware_msgs::State>("/op_mission_status", 1, true);
+		nh.getParam("/op_global_planner/destinationFileName", m_params.destinationsFile);
+		LoadDestinations(m_params.destinationsFile);
+	}
+
+
 	if(m_params.bEnableRvizInput)
 	{
 		sub_start_pose = nh.subscribe("/initialpose", 1, &GlobalPlanner::callbackGetStartPose, this);
@@ -131,12 +132,40 @@ GlobalPlanner::GlobalPlanner()
 		sub_cross_walk = nh.subscribe("/vector_map_info/cross_walk", 1, &GlobalPlanner::callbackGetVMCrossWalks,  this);
 		sub_nodes = nh.subscribe("/vector_map_info/node", 1, &GlobalPlanner::callbackGetVMNodes,  this);
 	}
+
+	tf::StampedTransform transform;
+	tf::TransformListener tf_listener;
+	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
+	m_OriginPos.position.x  = transform.getOrigin().x();
+	m_OriginPos.position.y  = transform.getOrigin().y();
+	m_OriginPos.position.z  = transform.getOrigin().z();
+	UtilityHNS::UtilityH::GetTickCount(m_ReplnningTimer);
 }
 
 GlobalPlanner::~GlobalPlanner()
 {
 	if(m_params.bEnableRvizInput)
+	{
 		SaveSimulationData();
+	}
+}
+
+void GlobalPlanner::callbackGetHMIState(const autoware_msgs::StateConstPtr& msg)
+{
+	PlannerHNS::HMI_MSG inc_msg = PlannerHNS::HMI_MSG::FromString(msg->mission_state);
+	if(inc_msg.type == PlannerHNS::CONFIRM_MSG) //client received destinations
+	{
+		std::cout << "Received Confirmation.. " << std::endl;
+	}
+	else if(inc_msg.type == PlannerHNS::DESTINATIONS_MSG) // Client is requesting destinations
+	{
+		std::cout << "Received Destinations Request .. " << std::endl;
+		//send destinations and wait for confirmation
+		LoadDestinations(m_params.destinationsFile);
+
+		std::cout << "Send Destinations Data.. " << std::endl;
+	}
+
 }
 
 void GlobalPlanner::callbackGetRoadStatusOccupancyGrid(const nav_msgs::OccupancyGridConstPtr& msg)
@@ -317,7 +346,9 @@ void GlobalPlanner::VisualizeAndSend(const std::vector<std::vector<PlannerHNS::W
 	PlannerHNS::ROSHelpers::createGlobalLaneArrayVelocityMarker(lane_array, pathsToVisualize);
 	pub_PathsRviz.publish(pathsToVisualize);
 	if((m_bFirstStart && m_params.bEnableHMI) || !m_params.bEnableHMI)
+	{
 		pub_Paths.publish(lane_array);
+	}
 
 	for(unsigned int i=0; i < generatedTotalPaths.size(); i++)
 	{
@@ -442,6 +473,38 @@ int GlobalPlanner::LoadSimulationData()
 	return nData;
 }
 
+void GlobalPlanner::LoadDestinations(const std::string& fileName, int curr_dst_id)
+{
+	std::string dstFileName = fileName;
+	UtilityHNS::DestinationsDataFileReader destination_data(dstFileName);
+	if(destination_data.ReadAllData() > 0)
+	{
+		PlannerHNS::HMI_MSG dest_msg;
+		dest_msg.msg_id = 1;
+		dest_msg.bErr = false;
+		dest_msg.type = PlannerHNS::DESTINATIONS_MSG;
+		dest_msg.curr_destination_id = curr_dst_id;
+		PlannerHNS::DESTINATION d;
+		for(auto& x: destination_data.m_data_list)
+		{
+			d.id = x.id;
+			d.name = x.name;
+			d.hour = x.hour;
+			d.minute = x.minute;
+			dest_msg.destinations.push_back(d);
+		}
+
+		autoware_msgs::State auto_state_msg;
+		auto_state_msg.mission_state = dest_msg.CreateStringMessage();
+		pub_hmi_mission.publish(auto_state_msg);
+		std::cout << "Read Destinations and send message ! " << std::endl;
+	}
+	else
+	{
+		std::cout << "Failed Read Destinations and send message ! " << std::endl;
+	}
+}
+
 void GlobalPlanner::MainLoop()
 {
 	ros::Rate loop_rate(25);
@@ -486,29 +549,6 @@ void GlobalPlanner::MainLoop()
 				PlannerHNS::VectorMapLoader vec_loader;
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
 			}
-
-//			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;
-//			if(m_MapRaw.GetVersion()==2)
-//			{
-//				std::cout << "Map Version 2" << endl;
-//				m_bKmlMap = true;
-//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessageV2(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
-//						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines,  m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true, m_params.bEnableLaneChange, false);
-//			}
-//			else if(m_MapRaw.GetVersion()==1)
-//			{
-//				std::cout << "Map Version 1" << endl;
-//				m_bKmlMap = true;
-//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr, PlannerHNS::GPSPoint(), m_Map, true, m_params.bEnableLaneChange, false);
-//			}
 
 			if(m_bKmlMap)
 			{
