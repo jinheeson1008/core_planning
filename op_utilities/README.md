@@ -77,5 +77,5 @@ This node connects between global planning (op_global_plannet) state machine and
 check the socket client code and [readme](https://gitlab.com/hatem-darweesh-autoware.ai/op_hmi_socket_client/-/tree/master)
 
 ### op_hmi_brige topic connections 
-![](https://gitlab.com/hatem-darweesh-autoware.ai/op_hmi_socket_client/-/tree/master/img/nodes_connection.png)
+![](nodes_connection.png)
 
