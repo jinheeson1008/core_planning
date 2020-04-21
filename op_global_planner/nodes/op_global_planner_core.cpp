@@ -51,7 +51,7 @@ GlobalPlanner::GlobalPlanner()
 
 	nh.getParam("/op_global_planner/enableReplan" , m_params.bEnableReplanning);
 	nh.getParam("/op_global_planner/enableDynamicMapUpdate" , m_params.bEnableDynamicMapUpdate);
-	nh.getParam("/op_global_planner/mapFileName" , m_params.KmlMapPath);
+	nh.getParam("/op_global_planner/mapFileName" , m_params.mapPath);
 
 	int iSource = 0;
 	nh.getParam("/op_global_planner/mapSource", iSource);
@@ -520,7 +520,7 @@ void GlobalPlanner::MainLoop()
 		{
 			m_bKmlMap = true;
 			PlannerHNS::KmlMapLoader kml_loader;
-			kml_loader.LoadKML(m_params.KmlMapPath, m_Map);
+			kml_loader.LoadKML(m_params.mapPath, m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
 			pub_MapRviz.publish(map_marker_array);
@@ -529,7 +529,7 @@ void GlobalPlanner::MainLoop()
 		{
 			m_bKmlMap = true;
 			PlannerHNS::VectorMapLoader vec_loader;
-			vec_loader.LoadFromFile(m_params.KmlMapPath, m_Map);
+			vec_loader.LoadFromFile(m_params.mapPath, m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
 
@@ -539,7 +539,7 @@ void GlobalPlanner::MainLoop()
 		{
 			m_bKmlMap = true;
 			PlannerHNS::Lanelet2MapLoader map_loader;
-			map_loader.LoadMap(m_params.KmlMapPath, m_Map);
+			map_loader.LoadMap(m_params.mapPath, m_Map);
 		}
 		else if (m_params.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bKmlMap)
 		{

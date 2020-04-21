@@ -58,27 +58,28 @@ namespace GlobalPlanningNS
 #define _ENABLE_VISUALIZE_PLAN
 #define REPLANNING_DISTANCE 30
 #define REPLANNING_TIME 5
-#define ARRIVE_DISTANCE 5
 #define CLEAR_COSTS_TIME 15 // seconds
 
-class WayPlannerParams
+class GlobalPlanningParams
 {
 public:
-	std::string KmlMapPath;
-	std::string exprimentName;
-	std::string destinationsFile;
-	bool bEnableSmoothing;
-	bool bEnableLaneChange;
-	bool bEnableHMI;
-	bool bEnableRvizInput;
-	bool bEnableReplanning;
-	double pathDensity;
-	PlannerHNS::MAP_SOURCE_TYPE	mapSource;
-	bool bEnableDynamicMapUpdate;
+	PlannerHNS::MAP_SOURCE_TYPE	mapSource; //which map source user wants to select, using autoware loaded map, load vector mapt from file, use kml map file, use lanelet2 map file.
+	std::string mapPath; //path to map file or folder, depending on the mapSource parameter
+	std::string exprimentName; //folder name that will contains generated global path logs, when new global path is generated a .csv file will be written.
+	std::string destinationsFile; //file path of the list of destinations for the global path to achieve.
+	bool bEnableSmoothing; //additional smoothing step to the generated global path, of the waypoints are far apart, this could lead to corners cutting.
+	bool bEnableLaneChange; //Enable general multiple global paths to enable lane change
+	bool bEnableHMI; // Enable communicating with third party HMI client, to receive outside commands such as go to specific destination, slow down, etc ..
+	bool bEnableRvizInput; //Using this will ignore reading the destinations file. GP will wait for user input to Rviz, user can select one start position and multiple destinations positions.
+	bool bEnableReplanning; //Enable going into an infinit loop of global planning, when the final destination is reached, the GP will plan a path from it to the firstdestination.
+	double pathDensity; //Used only when enableSmoothing is enabled, the maximum distance between each two waypoints in the generated path
+	int waitingTime; // witing time at each destination in seconds.
+	bool bEnableDynamicMapUpdate; //Future task, for sharing map and planning information between connected vehicles
 
 
-	WayPlannerParams()
+	GlobalPlanningParams()
 	{
+		waitingTime = 2;
 	    bEnableDynamicMapUpdate = false;
 		bEnableReplanning = false;
 		bEnableHMI = false;
@@ -98,7 +99,7 @@ public:
 	int m_iCurrentGoalIndex;
 protected:
 
-	WayPlannerParams m_params;
+	GlobalPlanningParams m_params;
 	PlannerHNS::WayPoint m_CurrentPose;
 	std::vector<PlannerHNS::WayPoint> m_GoalsPos;
 	PlannerHNS::WayPoint m_StartPose;
