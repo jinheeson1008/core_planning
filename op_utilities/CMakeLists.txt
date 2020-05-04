@@ -7,6 +7,7 @@ find_package(
   catkin REQUIRED COMPONENTS		
     roscpp
     autoware_msgs
+    autoware_can_msgs
     geometry_msgs  	
     map_file
     op_planner

@@ -75,32 +75,36 @@ OpenPlannerCarSimulator::OpenPlannerCarSimulator()
 	str_s6 << "simu_local_trajectory_";
 	str_s6 << m_SimParams.id;
 
+	str_s9 << "simu_global_trajectory_";
+	str_s9 << m_SimParams.id;
+
 	str_s7 << "simu_internal_info";
 	str_s7 << m_SimParams.id;
 
 	str_s8 << "simu_car_path_beh_";
 	str_s8 << m_SimParams.id;
 
-	pub_CurrPoseRviz				= nh.advertise<visualization_msgs::Marker>(str_s1.str() , 100);
-	pub_SimuBoxPose					= nh.advertise<geometry_msgs::PoseArray>(str_s5.str(), 100);
-	pub_SafetyBorderRviz  			= nh.advertise<visualization_msgs::Marker>(str_s4.str(), 1);
-	pub_LocalTrajectoriesRviz   	= nh.advertise<visualization_msgs::MarkerArray>(str_s6.str(), 1);
-	pub_BehaviorStateRviz			= nh.advertise<visualization_msgs::Marker>(str_s2.str(), 1);
-	pub_PointerBehaviorStateRviz	= nh.advertise<visualization_msgs::Marker>(str_s2.str(), 1);
-	pub_InternalInfoRviz			= nh.advertise<visualization_msgs::MarkerArray>(str_s7.str(), 1);
+	pub_CurrPoseRviz = nh.advertise<visualization_msgs::Marker>(str_s1.str() , 10);
+	pub_SimuBoxPose	= nh.advertise<geometry_msgs::PoseArray>(str_s5.str(), 10);
+	pub_SafetyBorderRviz = nh.advertise<visualization_msgs::Marker>(str_s4.str(), 1);
+	pub_LocalTrajectoriesRviz = nh.advertise<visualization_msgs::MarkerArray>(str_s6.str(), 1);
+	pub_GlobalTrajectoriesRviz	= nh.advertise<visualization_msgs::MarkerArray>(str_s9.str(), 1);
+	pub_BehaviorStateRviz = nh.advertise<visualization_msgs::Marker>(str_s2.str(), 1);
+	pub_PointerBehaviorStateRviz = nh.advertise<visualization_msgs::Marker>(str_s2.str(), 1);
+	pub_InternalInfoRviz = nh.advertise<visualization_msgs::MarkerArray>(str_s7.str(), 1);
 
-	pub_CurrentLocalPath 			= nh.advertise<autoware_msgs::Lane>(str_s8.str(), 1);
+	pub_CurrentLocalPath = nh.advertise<autoware_msgs::Lane>(str_s8.str(), 1);
 
-	sub_joystick = nh.subscribe("/joy", 		1, &OpenPlannerCarSimulator::callbackGetJoyStickInfo, 		this);
-	sub_StepSignal = nh.subscribe("/simu_step_signal", 		1, &OpenPlannerCarSimulator::callbackGetStepForwardSignals, 		this);
+	sub_joystick = nh.subscribe("/joy", 1, &OpenPlannerCarSimulator::callbackGetJoyStickInfo, this);
+	sub_StepSignal = nh.subscribe("/simu_step_signal", 1, &OpenPlannerCarSimulator::callbackGetStepForwardSignals, this);
 
 	// define subscribers.
 	if(m_SimParams.bRvizPositions)
 	{
 		bInitPos = false;
-		sub_initialpose 		= nh.subscribe("/initialpose", 		1, &OpenPlannerCarSimulator::callbackGetInitPose, 		this);
+		sub_initialpose = nh.subscribe("/initialpose", 1, &OpenPlannerCarSimulator::callbackGetInitPose, this);
 		bGoalPos = false;
-		sub_goalpose 		= nh.subscribe("/move_base_simple/goal", 1, &OpenPlannerCarSimulator::callbackGetGoalPose, 		this);
+		sub_goalpose = nh.subscribe("/move_base_simple/goal", 1, &OpenPlannerCarSimulator::callbackGetGoalPose, this);
 	}
 	else
 	{
@@ -120,10 +124,14 @@ OpenPlannerCarSimulator::OpenPlannerCarSimulator()
 	}
 
 	if(m_PlanningParams.enableFollowing)
-		sub_predicted_objects 			= nh.subscribe("/tracked_objects", 	1, &OpenPlannerCarSimulator::callbackGetPredictedObjects, 		this);
+	{
+		sub_predicted_objects = nh.subscribe("/detection/contour_tracker/objects", 1, &OpenPlannerCarSimulator::callbackGetPredictedObjects, this);
+	}
 
 	if(m_PlanningParams.enableTrafficLightBehavior)
-		sub_TrafficLightSignals		= nh.subscribe("/roi_signal", 		10,	&OpenPlannerCarSimulator::callbackGetTrafficLightSignals, 	this);
+	{
+		sub_TrafficLightSignals	= nh.subscribe("/roi_signal", 10, &OpenPlannerCarSimulator::callbackGetTrafficLightSignals, this);
+	}
 
 	std::ostringstream vel_frame_id;
 	vel_frame_id << "velodyne_" << m_SimParams.id;
@@ -132,14 +140,14 @@ OpenPlannerCarSimulator::OpenPlannerCarSimulator()
 	base_frame_id << "base_link_" << m_SimParams.id;
 	m_BaseLinkFrameID = base_frame_id.str();
 
-	if(m_bSimulatedVelodyne)
-	{
-		std::ostringstream velodyne_special_points_raw;
-		velodyne_special_points_raw << "points_raw_" << m_SimParams.id;
-
-		pub_SimulatedVelodyne   = nh.advertise<const sensor_msgs::PointCloud2>(velodyne_special_points_raw.str(), 1);
-		sub_cloud_clusters 		= nh.subscribe("/cloud_clusters", 1, &OpenPlannerCarSimulator::callbackGetCloudClusters, this);
-	}
+//	if(m_bSimulatedVelodyne)
+//	{
+//		std::ostringstream velodyne_special_points_raw;
+//		velodyne_special_points_raw << "points_raw_" << m_SimParams.id;
+//
+//		pub_SimulatedVelodyne   = nh.advertise<const sensor_msgs::PointCloud2>(velodyne_special_points_raw.str(), 1);
+//		sub_cloud_clusters 		= nh.subscribe("/cloud_clusters", 1, &OpenPlannerCarSimulator::callbackGetCloudClusters, this);
+//	}
 
 	//Mapping Section
 	sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &OpenPlannerCarSimulator::callbackGetVMLanes,  this);
@@ -226,7 +234,7 @@ void OpenPlannerCarSimulator::ReadParamFromLaunchFile(PlannerHNS::CAR_BASIC_INFO
 	_nh.getParam("maxAcceleration", m_CarInfo.max_acceleration );
 	_nh.getParam("maxDeceleration", m_CarInfo.max_deceleration );
 	_nh.getParam("enableStepByStepSignal", m_bStepByStep );
-	_nh.getParam("enableSimulatedVelodyne", m_bSimulatedVelodyne );
+	//_nh.getParam("enableSimulatedVelodyne", m_bSimulatedVelodyne );
 	_nh.getParam("enableUsingJoyStick", bUseWheelController );
 
 	//_nh.getParam("enableCurbObstacles", m_bEnableCurbObstacles);
@@ -290,35 +298,35 @@ void OpenPlannerCarSimulator::callbackGetJoyStickInfo(const sensor_msgs::JoyCons
 	std::cout << "Steering " << m_JoyDesiredStatus.steer << ", Speed: " <<  m_JoyDesiredStatus.speed <<", acceleration " << acceleration<< ", Braking " << braking <<", MaxSpeed: " << m_CarInfo.max_speed_forward << std::endl;
 }
 
-void OpenPlannerCarSimulator::callbackGetCloudClusters(const autoware_msgs::CloudClusterArrayConstPtr& msg)
-{
-	sensor_msgs::PointCloud2 others_cloud;
-	for(unsigned int i=0; i < msg->clusters.size(); i++)
-	{
-		pcl::concatenatePointCloud(others_cloud,msg->clusters.at(i).cloud, others_cloud);
-	}
-
-	if(others_cloud.data.size() <= 0)
-		return;
-
-	try
-	{
-		tf::StampedTransform transform;
-		m_Listener.lookupTransform(m_VelodyneFrameID, "map",ros::Time(0), transform);
-		sensor_msgs::PointCloud2 others_cloud_transformed;
-		pcl_ros::transformPointCloud(m_VelodyneFrameID, transform, others_cloud, others_cloud_transformed);
-
-
-		others_cloud_transformed.header.frame_id = m_VelodyneFrameID;
-		others_cloud_transformed.header.stamp = ros::Time();
-		pub_SimulatedVelodyne.publish(others_cloud_transformed);
-		//std::cout << "Successful Transformation ! " << std::endl;
-	}
-	catch (tf::TransformException& ex)
-	{
-		//ROS_ERROR("Transformation Failed %s", ex.what());
-	}
-}
+//void OpenPlannerCarSimulator::callbackGetCloudClusters(const autoware_msgs::CloudClusterArrayConstPtr& msg)
+//{
+//	sensor_msgs::PointCloud2 others_cloud;
+//	for(unsigned int i=0; i < msg->clusters.size(); i++)
+//	{
+//		pcl::concatenatePointCloud(others_cloud,msg->clusters.at(i).cloud, others_cloud);
+//	}
+//
+//	if(others_cloud.data.size() <= 0)
+//		return;
+//
+//	try
+//	{
+//		tf::StampedTransform transform;
+//		m_Listener.lookupTransform(m_VelodyneFrameID, "map",ros::Time(0), transform);
+//		sensor_msgs::PointCloud2 others_cloud_transformed;
+//		pcl_ros::transformPointCloud(m_VelodyneFrameID, transform, others_cloud, others_cloud_transformed);
+//
+//
+//		others_cloud_transformed.header.frame_id = m_VelodyneFrameID;
+//		others_cloud_transformed.header.stamp = ros::Time();
+//		pub_SimulatedVelodyne.publish(others_cloud_transformed);
+//		//std::cout << "Successful Transformation ! " << std::endl;
+//	}
+//	catch (tf::TransformException& ex)
+//	{
+//		//ROS_ERROR("Transformation Failed %s", ex.what());
+//	}
+//}
 
 void OpenPlannerCarSimulator::callbackGetStepForwardSignals(const geometry_msgs::TwistStampedConstPtr& msg)
 {
@@ -396,16 +404,32 @@ void OpenPlannerCarSimulator::GetTransformFromTF(const std::string parent_frame,
 
 void OpenPlannerCarSimulator::callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg)
 {
+	autoware_msgs::DetectedObjectArray globalObjects;
+	std::string source_data_frame = msg->header.frame_id;
+	std::string target_prediction_frame = "/map";
+
+	if(source_data_frame.compare(target_prediction_frame) > 0)
+	{
+		tf::TransformListener tf_listener;
+		tf::StampedTransform local2global;
+		PlannerHNS::ROSHelpers::getTransformFromTF(source_data_frame, target_prediction_frame, tf_listener, local2global);
+		globalObjects.header = msg->header;
+		PlannerHNS::ROSHelpers::transformDetectedObjects(source_data_frame, target_prediction_frame, local2global, *msg, globalObjects);
+	}
+	else
+	{
+		globalObjects = *msg;
+	}
+
 	m_PredictedObjects.clear();
 	bPredictedObjects = true;
-
 	PlannerHNS::DetectedObject obj;
 
-	for(unsigned int i = 0 ; i <msg->objects.size(); i++)
+	for(unsigned int i = 0 ; i <globalObjects.objects.size(); i++)
 	{
-		if(msg->objects.at(i).id != m_SimParams.id)
+		if(globalObjects.objects.at(i).id != m_SimParams.id)
 		{
-			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(msg->objects.at(i), obj);
+			PlannerHNS::ROSHelpers::ConvertFromAutowareDetectedObjectToOpenPlannerDetectedObject(globalObjects.objects.at(i), obj);
 			m_PredictedObjects.push_back(obj);
 		}
 //		else
@@ -467,7 +491,7 @@ void OpenPlannerCarSimulator::displayFollowingInfo(const std::vector<PlannerHNS:
 
 }
 
-void OpenPlannerCarSimulator::visualizePath(const std::vector<PlannerHNS::WayPoint>& path)
+void OpenPlannerCarSimulator::visualizePath(const std::vector<PlannerHNS::WayPoint>& path, ros::Publisher& pub_Rviz)
 {
 	visualization_msgs::MarkerArray markerArray;
 
@@ -505,7 +529,7 @@ void OpenPlannerCarSimulator::visualizePath(const std::vector<PlannerHNS::WayPoi
 
 	markerArray.markers.push_back(lane_waypoint_marker);
 
-	pub_LocalTrajectoriesRviz.publish(markerArray);
+	pub_Rviz.publish(markerArray);
 }
 
 void OpenPlannerCarSimulator::callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg)
@@ -973,7 +997,8 @@ void OpenPlannerCarSimulator::MainLoop()
 				}
 			}
 			displayFollowingInfo(m_LocalPlanner->m_TrajectoryCostsCalculator.m_SafetyBorder.points, m_LocalPlanner->state);
-			visualizePath(m_LocalPlanner->m_Path);
+			visualizePath(m_LocalPlanner->m_Path, pub_LocalTrajectoriesRviz);
+			visualizePath(m_GlobalPaths.at(0), pub_GlobalTrajectoriesRviz);
 			visualizeBehaviors();
 
 

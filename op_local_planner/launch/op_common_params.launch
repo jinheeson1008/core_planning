@@ -1,3 +1,4 @@
+<!-- -->
 <launch>
 
 	<arg name="mapSource" 					default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml=2, lanelet2 file=3 -->
@@ -38,7 +39,8 @@
 
 	<arg name="steeringDelay" 				default="1.2" />
 	<arg name="minPursuiteDistance" 		default="3.0"  />
-	<arg name="additionalBrakingDistance" 	default="5.0"  />
+	<arg name="additionalBrakingDistance" 	default="1.0"  />
+	<arg name="goalDiscoveryDistance" 		default="1.0"  />
 	
 	<arg name="giveUpDistance" 				default="-4.0"  />
 	
@@ -51,7 +53,7 @@
 	<arg name="vel_can_topic"				default="/can_info" />		
 	<arg name="experimentName" 				default="TLRTEST" />		
 	
-	<arg name="objects_input_topic" 		default="/detection/object_tracker/objects" />
+	<arg name="objects_input_topic" 		default="/detection/contour_tracker/objects" />
 
 	<node pkg="op_local_planner" type="op_common_params" name="op_common_params" output="screen">	
 	<param name="mapSource" 				value="$(arg mapSource)" /> <!-- Autoware=0, Vector Map Folder=1, kml=2 -->
@@ -86,6 +88,7 @@
 	<param name="steeringDelay" 			value="$(arg steeringDelay)" />
 	<param name="minPursuiteDistance" 		value="$(arg minPursuiteDistance)"  />	
 	<param name="additionalBrakingDistance" value="$(arg additionalBrakingDistance)"  />
+	<param name="goalDiscoveryDistance" 	value="$(arg goalDiscoveryDistance)"  />
 	<param name="giveUpDistance" 			value="$(arg giveUpDistance)"  />
 	<param name="maxAcceleration" 			value="$(arg maxAcceleration)" />
 	<param name="maxDeceleration" 			value="$(arg maxDeceleration)" />

@@ -111,7 +111,7 @@ protected:
 	std::string m_VelodyneFrameID;
 
 	bool m_bStepByStep;
-	bool m_bSimulatedVelodyne;
+	//bool m_bSimulatedVelodyne;
 	bool m_bGoNextStep;
 	bool 						m_bMap;
 	PlannerHNS::RoadNetwork		m_Map;
@@ -145,10 +145,11 @@ protected:
 	ros::Publisher pub_SimuBoxPose;
 	ros::Publisher pub_CurrPoseRviz;
 	ros::Publisher pub_LocalTrajectoriesRviz;
+	ros::Publisher pub_GlobalTrajectoriesRviz;
 	ros::Publisher pub_BehaviorStateRviz;
 	ros::Publisher pub_PointerBehaviorStateRviz;
 	ros::Publisher pub_InternalInfoRviz;
-	ros::Publisher pub_SimulatedVelodyne;
+	//ros::Publisher pub_SimulatedVelodyne;
 	ros::Publisher pub_CurrentLocalPath;
 
 	// define subscribers.
@@ -157,7 +158,7 @@ protected:
 	ros::Subscriber sub_predicted_objects;
 	ros::Subscriber sub_TrafficLightSignals	;
 	ros::Subscriber sub_StepSignal;
-	ros::Subscriber sub_cloud_clusters;
+	//ros::Subscriber sub_cloud_clusters;
 	ros::Subscriber sub_joystick;
 
 	// Callback function for subscriber.
@@ -166,7 +167,7 @@ protected:
 	void callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg);
 	void callbackGetTrafficLightSignals(const autoware_msgs::Signals& msg);
 	void callbackGetStepForwardSignals(const geometry_msgs::TwistStampedConstPtr& msg);
-	void callbackGetCloudClusters(const autoware_msgs::CloudClusterArrayConstPtr& msg);
+	//void callbackGetCloudClusters(const autoware_msgs::CloudClusterArrayConstPtr& msg);
 	void callbackGetJoyStickInfo(const sensor_msgs::JoyConstPtr& msg);
 
 public:
@@ -182,7 +183,7 @@ public:
 		  PlannerHNS::ControllerParams& m_ControlParams);
 
   void displayFollowingInfo(const std::vector<PlannerHNS::GPSPoint>& safety_rect, PlannerHNS::WayPoint& curr_pose);
-  void visualizePath(const std::vector<PlannerHNS::WayPoint>& path);
+  void visualizePath(const std::vector<PlannerHNS::WayPoint>& path, ros::Publisher& pub_Rviz);
 
   void visualizeBehaviors();
 

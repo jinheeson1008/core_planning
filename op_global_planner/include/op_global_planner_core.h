@@ -71,16 +71,13 @@ public:
 	bool bEnableLaneChange; //Enable general multiple global paths to enable lane change
 	bool bEnableHMI; // Enable communicating with third party HMI client, to receive outside commands such as go to specific destination, slow down, etc ..
 	bool bEnableRvizInput; //Using this will ignore reading the destinations file. GP will wait for user input to Rviz, user can select one start position and multiple destinations positions.
-	bool bEnableReplanning; //Enable going into an infinit loop of global planning, when the final destination is reached, the GP will plan a path from it to the firstdestination.
+	bool bEnableReplanning; //Enable going into an infinite loop of global planning, when the final destination is reached, the GP will plan a path from it to the first destination.
 	double pathDensity; //Used only when enableSmoothing is enabled, the maximum distance between each two waypoints in the generated path
-	int waitingTime; // witing time at each destination in seconds.
-	bool bEnableDynamicMapUpdate; //Future task, for sharing map and planning information between connected vehicles
-
+	int waitingTime; // waiting time at each destination in seconds.
 
 	GlobalPlanningParams()
 	{
 		waitingTime = 2;
-	    bEnableDynamicMapUpdate = false;
 		bEnableReplanning = false;
 		bEnableHMI = false;
 		bEnableSmoothing = false;
@@ -105,12 +102,7 @@ protected:
 	PlannerHNS::WayPoint m_StartPose;
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::VehicleState m_VehicleState;
-	std::vector<int> m_GridMapIntType;
-	std::vector<std::pair<std::vector<PlannerHNS::WayPoint*> , timespec> > m_ModifiedMapItemsTimes;
-	timespec m_ReplnningTimer;
-
 	int m_GlobalPathID;
-
 	bool m_bFirstStart;
 
 	ros::NodeHandle nh;
@@ -151,7 +143,6 @@ private:
   void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
   void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
   void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
-  void callbackGetRoadStatusOccupancyGrid(const nav_msgs::OccupancyGridConstPtr& msg);
   /**
    * @brief Communication between Global Planner and HMI bridge
    * @param msg
@@ -169,7 +160,6 @@ private:
   	void VisualizeDestinations(std::vector<PlannerHNS::WayPoint>& destinations, const int& iSelected);
   	void SaveSimulationData();
   	int LoadSimulationData();
-  	void ClearOldCostFromMap();
   	void LoadDestinations(const std::string& fileName, int curr_dst_id = 0);
 
 

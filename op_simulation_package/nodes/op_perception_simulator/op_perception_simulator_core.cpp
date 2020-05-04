@@ -48,9 +48,9 @@ OpenPlannerSimulatorPerception::OpenPlannerSimulatorPerception()
 	nh.getParam("/op_perception_simulator/GuassianErrorFactor" , m_DecParams.errFactor);
 	nh.getParam("/op_perception_simulator/pointCloudPointsNumber" , m_DecParams.nPointsPerObj);
 
-	pub_DetectedObjects = nh.advertise<autoware_msgs::CloudClusterArray>("cloud_clusters",1);
+	pub_DetectedObjects = nh.advertise<autoware_msgs::CloudClusterArray>("simu_cloud_clusters",1);
 
-	sub_simulated_obstacle_pose_rviz = nh.subscribe("/clicked_point", 1, &OpenPlannerSimulatorPerception::callbackGetRvizPoint,	this);
+	sub_simulated_obstacle_pose_rviz = nh.subscribe("/move_base_simple/goal", 1, &OpenPlannerSimulatorPerception::callbackGetRvizPoint,	this);
 
 	for(int i=1; i <= m_DecParams.nSimuObjs; i++)
 	{
@@ -77,17 +77,17 @@ OpenPlannerSimulatorPerception::~OpenPlannerSimulatorPerception()
 }
 
 
-void OpenPlannerSimulatorPerception::callbackGetRvizPoint(const geometry_msgs::PointStampedConstPtr& msg)
+void OpenPlannerSimulatorPerception::callbackGetRvizPoint(const geometry_msgs::PoseStampedConstPtr& msg)
 {
 	tf::StampedTransform transform;
 	tf::TransformListener tf_listener;
 	PlannerHNS::ROSHelpers::getTransformFromTF("world", "map", tf_listener, transform);
 
 	geometry_msgs::Pose point;
-	point.position.x = msg->point.x + transform.getOrigin().x();
-	point.position.y = msg->point.y + transform.getOrigin().y();
-	point.position.z = msg->point.z + transform.getOrigin().z();
-	point.orientation =  tf::createQuaternionMsgFromRollPitchYaw(0, 0, 0);
+	point.position.x = msg->pose.position.x + transform.getOrigin().x();
+	point.position.y = msg->pose.position.y + transform.getOrigin().y();
+	point.position.z = msg->pose.position.z + transform.getOrigin().z();
+	point.orientation =  msg->pose.orientation;
 
 	m_SimulatedCluter = GenerateSimulatedObstacleCluster(SIMU_OBSTACLE_WIDTH , SIMU_OBSTACLE_LENGTH, SIMU_OBSTACLE_HEIGHT, SIMU_OBSTACLE_POINTS_NUM, point);
 	m_SimulatedCluter.id = SIMU_OBSTACLE_ID;
@@ -164,6 +164,9 @@ autoware_msgs::CloudCluster OpenPlannerSimulatorPerception::GenerateSimulatedObs
 	NormalDIST dist_x(0, m_DecParams.errFactor);
 	VariatGEN gen_x(eng, dist_x);
 
+	cluster.header.frame_id = "/map";
+	cluster.header.stamp = ros::Time();
+
 	cluster.centroid_point.point.x = centerPose.position.x + gen_x();
 	cluster.centroid_point.point.y = centerPose.position.y + gen_x();
 	cluster.centroid_point.point.z = centerPose.position.z;
@@ -237,10 +240,13 @@ void OpenPlannerSimulatorPerception::MainLoop()
 				m_keepTime.at(i).second -= 1;
 		}
 
+		m_ObjClustersArray.header.frame_id = "/map";
+
 		if(m_bSetSimulatedObj)
 		{
 			m_AllObjClustersArray = m_ObjClustersArray;
 			m_AllObjClustersArray.clusters.push_back(m_SimulatedCluter);
+			//std::cout << "Sending Fake Obstacles: " << m_AllObjClustersArray.clusters.size() <<std::endl;
 			pub_DetectedObjects.publish(m_AllObjClustersArray);
 		}
 		else

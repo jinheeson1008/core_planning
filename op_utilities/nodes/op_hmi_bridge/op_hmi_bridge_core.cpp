@@ -56,6 +56,10 @@ void HMI_Bridge::callbackGetGlobalPlannerState(const autoware_msgs::StateConstPt
 	if(m_SocketServer != nullptr)
 	{
 		std::cout << "Received Message From GP .. " <<std::endl;
+		autoware_msgs::State state;
+		state.mission_state = "1,1,,0,0,0,,0,,,";
+		pub_global_planner.publish(state);
+
 		m_SocketServer->SendMSG(m_CurrentGlobalMsg);
 	}
 }

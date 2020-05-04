@@ -29,6 +29,7 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 	bWayGlobalPathToUse = false;
 	m_bUseMoveingObjectsPrediction = false;
 	bEnableSmoothGlobalPathForCARLA = false;
+	m_bKeepCurrentIfPossible = false;
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
@@ -72,6 +73,7 @@ TrajectoryEvalCore::~TrajectoryEvalCore()
 void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 {
 	_nh.getParam("/op_trajectory_evaluator/enablePrediction", m_bUseMoveingObjectsPrediction);
+	_nh.getParam("/op_trajectory_evaluator/keepCurrentTrajectory", m_bKeepCurrentIfPossible);
 
 	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
 	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
@@ -289,7 +291,7 @@ void TrajectoryEvalCore::MainLoop()
 
 			if(m_GlobalPathSections.size()>0)
 			{
-			  tc = m_TrajectoryCostsCalculator.doOneStep(m_GeneratedRollOuts, m_GlobalPathSections.at(0), m_CurrentPos, m_PlanningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory);
+			  tc = m_TrajectoryCostsCalculator.doOneStep(m_GeneratedRollOuts, m_GlobalPathSections.at(0), m_CurrentPos, m_PlanningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 
 
 				autoware_msgs::Lane l;

@@ -386,6 +386,7 @@ void OpenPlannerDataLogger::callbackGetCommandCMD(const autoware_msgs::ControlCo
 
 void OpenPlannerDataLogger::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg)
 {
+
 	m_VehicleStatus.speed = msg->speed/3.6;
 	m_CurrentPos.v = m_VehicleStatus.speed;
 	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_steer_angle / m_CarInfo.max_steer_value;

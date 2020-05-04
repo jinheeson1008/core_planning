@@ -83,7 +83,7 @@ protected:
 
 	// Callback function for subscriber.
 	void callbackGetSimuData(const geometry_msgs::PoseArray &msg);
-	void callbackGetRvizPoint(const geometry_msgs::PointStampedConstPtr& msg);
+	void callbackGetRvizPoint(const geometry_msgs::PoseStampedConstPtr& msg);
 
 public:
 	OpenPlannerSimulatorPerception();

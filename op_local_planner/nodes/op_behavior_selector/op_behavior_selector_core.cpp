@@ -176,6 +176,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	nh.getParam("/op_common_params/steeringDelay", controlParams.SteeringDelay);
 	nh.getParam("/op_common_params/minPursuiteDistance", controlParams.minPursuiteDistance );
 	nh.getParam("/op_common_params/additionalBrakingDistance", m_PlanningParams.additionalBrakingDistance );
+	nh.getParam("/op_common_params/goalDiscoveryDistance", m_PlanningParams.goalDiscoveryDistance);
 	nh.getParam("/op_common_params/giveUpDistance", m_PlanningParams.giveUpDistance );
 
 	int iSource = 0;
@@ -534,6 +535,7 @@ void BehaviorGen::VisualizeLocalPlanner()
 	pub_ActualSpeedRviz.publish(target_speed);
 
 	visualization_msgs::MarkerArray selected_path;
+	pub_SelectedPathRviz.publish(selected_path);
 	std::vector<PlannerHNS::WayPoint> path = m_BehaviorGenerator.m_Path;
 	PlannerHNS::PlanningHelpers::FixPathDensity(path, 1.5);
 	PlannerHNS::ROSHelpers::TrajectoryToMarkersWithCircles(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path);
