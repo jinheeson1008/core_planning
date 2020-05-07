@@ -55,10 +55,8 @@ namespace GlobalPlanningNS
 {
 
 #define MAX_GLOBAL_PLAN_DISTANCE 100000
-#define _ENABLE_VISUALIZE_PLAN
-#define REPLANNING_DISTANCE 30
+#define REPLANNING_DISTANCE 2.5
 #define REPLANNING_TIME 5
-#define CLEAR_COSTS_TIME 15 // seconds
 
 class GlobalPlanningParams
 {
@@ -74,10 +72,12 @@ public:
 	bool bEnableReplanning; //Enable going into an infinite loop of global planning, when the final destination is reached, the GP will plan a path from it to the first destination.
 	double pathDensity; //Used only when enableSmoothing is enabled, the maximum distance between each two waypoints in the generated path
 	int waitingTime; // waiting time at each destination in seconds.
+	double endOfPathDistance; // when the vehicle is close to the end of global path with this distance , the waiting state will triggered
+	double slowDownSpeed; // when HMI send slow down command, this speed will be assigned to the new trajectory, in km/hour
 
 	GlobalPlanningParams()
 	{
-		waitingTime = 2;
+		waitingTime = 4;
 		bEnableReplanning = false;
 		bEnableHMI = false;
 		bEnableSmoothing = false;
@@ -85,6 +85,8 @@ public:
 		bEnableRvizInput = true;
 		pathDensity = 0.5;
 		mapSource = PlannerHNS::MAP_KML_FILE;
+		endOfPathDistance = 0.5;
+		slowDownSpeed = 15;
 	}
 };
 
@@ -94,6 +96,7 @@ class GlobalPlanner
 
 public:
 	int m_iCurrentGoalIndex;
+	int m_HMIDestinationID;
 protected:
 
 	GlobalPlanningParams m_params;
@@ -103,7 +106,14 @@ protected:
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::VehicleState m_VehicleState;
 	int m_GlobalPathID;
-	bool m_bFirstStart;
+	std::vector<int> m_prev_index;
+	int m_iMessageID;
+	bool m_bFirstStartHMI;
+	bool m_bWaitingState;
+	bool m_bSlowDownState;
+	bool m_bStoppingState;
+	bool m_bReStartState;
+	timespec m_PlanningTimer;
 
 	ros::NodeHandle nh;
 
@@ -156,11 +166,19 @@ private:
   	std::vector<std::vector<PlannerHNS::WayPoint> > m_GeneratedTotalPaths;
 
   	bool GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, PlannerHNS::WayPoint& goalPoint, std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths);
-  	void VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> > generatedTotalPaths);
+  	void VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths);
   	void VisualizeDestinations(std::vector<PlannerHNS::WayPoint>& destinations, const int& iSelected);
   	void SaveSimulationData();
   	int LoadSimulationData();
-  	void LoadDestinations(const std::string& fileName, int curr_dst_id = 0);
+  	void LoadDestinations(const std::string& fileName);
+  	bool CheckForEndOfPath(const std::vector<std::vector<PlannerHNS::WayPoint> >& paths, const PlannerHNS::WayPoint& currPose, const double& end_range_distance);
+  	void FindIncommingBranches(const std::vector<std::vector<PlannerHNS::WayPoint> >& globalPaths, const PlannerHNS::WayPoint& currPose,const double& min_distance,const double& max_distance,
+  				std::vector<PlannerHNS::WayPoint*>& branches);
+  	PlannerHNS::ACTION_TYPE FromMsgAction(const PlannerHNS::MSG_ACTION& msg_action);
+  	PlannerHNS::MSG_ACTION ToMsgAction(const PlannerHNS::ACTION_TYPE& action);
+  	void SendAvailableOptionsHMI();
+  	bool UpdateGoalIndex();
+  	bool UpdateGoalWithHMI();
 
 
   	//Mapping Section

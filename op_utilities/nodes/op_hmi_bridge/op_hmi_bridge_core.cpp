@@ -55,11 +55,7 @@ void HMI_Bridge::callbackGetGlobalPlannerState(const autoware_msgs::StateConstPt
 	// Send the latest global planning message to socket based HMI
 	if(m_SocketServer != nullptr)
 	{
-		std::cout << "Received Message From GP .. " <<std::endl;
-		autoware_msgs::State state;
-		state.mission_state = "1,1,,0,0,0,,0,,,";
-		pub_global_planner.publish(state);
-
+		//std::cout << "Received Message From GP:  " << msg->mission_state <<std::endl;
 		m_SocketServer->SendMSG(m_CurrentGlobalMsg);
 	}
 }
@@ -76,9 +72,9 @@ void HMI_Bridge::MainLoop()
 			int bNew = m_SocketServer->GetLatestMSG(inc_msg);
 			if(bNew > 0)
 			{
-				std::cout << "Received Data From HMI socket Client and forward it to global planner .. " << std::endl;
 				autoware_msgs::State state;
 				state.mission_state = inc_msg.CreateStringMessage();
+				//std::cout << "Received Data From HMI socket Client: " << state.mission_state << std::endl;
 				pub_global_planner.publish(state);
 			}
 		}

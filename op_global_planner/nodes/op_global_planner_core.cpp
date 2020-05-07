@@ -25,11 +25,18 @@ namespace GlobalPlanningNS
 
 GlobalPlanner::GlobalPlanner()
 {
+	m_iMessageID = 1;
 	m_pCurrGoal = 0;
 	m_iCurrentGoalIndex = 0;
+	m_HMIDestinationID = 0;
 	m_bKmlMap = false;
-	m_bFirstStart = true;
+	m_bFirstStartHMI = false;
+	m_bWaitingState = false;
+	m_bSlowDownState = false;
+	m_bStoppingState = false;
+	m_bReStartState = false;
 	m_GlobalPathID = 1;
+	UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
 
 	nh.getParam("/op_global_planner/pathDensity" , m_params.pathDensity);
 	nh.getParam("/op_global_planner/enableSmoothing" , m_params.bEnableSmoothing);
@@ -49,6 +56,7 @@ GlobalPlanner::GlobalPlanner()
 		UtilityHNS::DataRW::CreateExperimentFolder(m_params.exprimentName);
 	}
 
+	nh.getParam("/op_global_planner/goalConfirmDistance" , m_params.endOfPathDistance);
 	nh.getParam("/op_global_planner/enableReplan" , m_params.bEnableReplanning);
 	nh.getParam("/op_global_planner/mapFileName" , m_params.mapPath);
 
@@ -147,23 +155,67 @@ GlobalPlanner::~GlobalPlanner()
 
 void GlobalPlanner::callbackGetHMIState(const autoware_msgs::StateConstPtr& msg)
 {
-	std::cout << "Received HMI Message .. " << msg->mission_state << std::endl;
+	//std::cout << "Received HMI Message .. " << msg->mission_state << std::endl;
 
 	PlannerHNS::HMI_MSG inc_msg = PlannerHNS::HMI_MSG::FromString(msg->mission_state);
 	if(inc_msg.type == PlannerHNS::CONFIRM_MSG) //client received destinations
 	{
 		std::cout << "Received Confirmation.. " << std::endl;
-		m_bFirstStart = true;
+		m_bFirstStartHMI = true;
 	}
 	else if(inc_msg.type == PlannerHNS::DESTINATIONS_MSG) // Client is requesting destinations
 	{
 		std::cout << "Received Destinations Request .. " << std::endl;
+		m_bFirstStartHMI = false;
 		//send destinations and wait for confirmation
 		LoadDestinations(m_params.destinationsFile);
 
 		std::cout << "Send Destinations Data.. " << std::endl;
 	}
+	else if(inc_msg.type == PlannerHNS::COMMAND_MSG) // Client is sending a command
+	{
+		std::cout << "Received Command Request .. " << std::endl;
 
+		if(inc_msg.current_action == PlannerHNS::MSG_START_ACTION || inc_msg.current_action == PlannerHNS::MSG_CHANGE_DESTINATION)
+		{
+			m_bFirstStartHMI = true;
+			m_bReStartState = true;
+			m_bSlowDownState = false;
+			m_bStoppingState = false;
+			m_HMIDestinationID = inc_msg.curr_destination_id;
+			std::cout << " >>>>> Go Go Go ! " <<  std::endl;
+		}
+		else if(inc_msg.current_action == PlannerHNS::MSG_SLOWDOWN_ACTION)
+		{
+			m_bSlowDownState = true;
+		}
+		else if(inc_msg.current_action == PlannerHNS::MSG_SLOWDOWN_ACTION)
+		{
+			m_bStoppingState = true;
+			m_bSlowDownState = false;
+		}
+	}
+}
+
+bool GlobalPlanner::UpdateGoalWithHMI()
+{
+	if(m_bStoppingState || m_bSlowDownState || m_bReStartState)
+	{
+		return true;
+	}
+	else
+	{
+		for(unsigned int i=0; i < m_GoalsPos.size(); i++)
+		{
+			if(m_GoalsPos.at(i).id == m_HMIDestinationID && i > m_iCurrentGoalIndex)
+			{
+				m_iCurrentGoalIndex = i;
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 void GlobalPlanner::callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr &msg)
@@ -215,7 +267,15 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 	std::vector<int> predefinedLanesIds;
 	double ret = 0;
 
-	ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint, MAX_GLOBAL_PLAN_DISTANCE, m_params.bEnableLaneChange, predefinedLanesIds, m_Map, generatedTotalPaths);
+	if(m_bStoppingState)
+	{
+		generatedTotalPaths.clear();
+		ret = m_PlannerH.PlanUsingDPRandom(startPoint, 20, m_Map, generatedTotalPaths);
+	}
+	else
+	{
+		ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint, MAX_GLOBAL_PLAN_DISTANCE, m_params.bEnableLaneChange, predefinedLanesIds, m_Map, generatedTotalPaths);
+	}
 
 	if(ret == 0)
 	{
@@ -236,17 +296,27 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 			}
 		}
 
+		m_prev_index.clear();
 		for(unsigned int i=0; i < generatedTotalPaths.size(); i++)
 		{
+			m_prev_index.push_back(0); // start following the global path from waypoint index 0
+
 			PlannerHNS::PlanningHelpers::CalcAngleAndCost(generatedTotalPaths.at(i));
 			if(m_GlobalPathID > 10000)
+			{
 				m_GlobalPathID = 1;
+			}
 
 			for(unsigned int j=0; j < generatedTotalPaths.at(i).size(); j++)
+			{
 				generatedTotalPaths.at(i).at(j).gid = m_GlobalPathID;
+				if(m_bSlowDownState)
+				{
+					generatedTotalPaths.at(i).at(j).v = m_params.slowDownSpeed;
+				}
+			}
 
 			m_GlobalPathID++;
-
 			std::cout << "New DP Path -> " << generatedTotalPaths.at(i).size() << std::endl;
 		}
 		return true;
@@ -258,7 +328,153 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 	return false;
 }
 
-void GlobalPlanner::VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> > generatedTotalPaths)
+void GlobalPlanner::FindIncommingBranches(const std::vector<std::vector<PlannerHNS::WayPoint> >& globalPaths, const PlannerHNS::WayPoint& currPose,const double& min_distance,const double& max_distance,
+			std::vector<PlannerHNS::WayPoint*>& branches)
+{
+//	static int detection_range = 75; // meter
+	if(globalPaths.size() > 0)
+	{
+		int close_index = PlannerHNS::PlanningHelpers::GetClosestNextPointIndexFast(globalPaths.at(0), currPose);
+		PlannerHNS::WayPoint closest_wp = globalPaths.at(0).at(close_index);
+		double d = 0;
+		for(unsigned int i=close_index+1; i < globalPaths.at(0).size(); i++)
+		{
+			d += hypot(globalPaths.at(0).at(i).pos.y - globalPaths.at(0).at(i-1).pos.y, globalPaths.at(0).at(i).pos.x - globalPaths.at(0).at(i-1).pos.x);
+
+//			if(d - min_distance > detection_range)
+//				break;
+
+			if(d < max_distance && d > min_distance && globalPaths.at(0).at(i).pFronts.size() > 1)
+			{
+				for(unsigned int j = 0; j< globalPaths.at(0).at(i).pFronts.size(); j++)
+				{
+					PlannerHNS::WayPoint* wp =  globalPaths.at(0).at(i).pFronts.at(j);
+
+
+					bool bFound = false;
+					for(unsigned int ib=0; ib< branches.size(); ib++)
+					{
+						if(wp->actionCost.size() > 0 &&  branches.at(ib)->actionCost.size() > 0 && branches.at(ib)->actionCost.at(0).first == wp->actionCost.at(0).first)
+						{
+							bFound = true;
+							break;
+						}
+					}
+
+					if(wp->actionCost.size() > 0 && !bFound && closest_wp.laneId != wp->laneId)
+						branches.push_back(wp);
+				}
+			}
+		}
+	}
+}
+
+bool GlobalPlanner::CheckForEndOfPath(const std::vector<std::vector<PlannerHNS::WayPoint> >& paths, const PlannerHNS::WayPoint& currPose, const double& end_range_distance)
+{
+	if(paths.size() == 0) return false;
+
+	PlannerHNS::RelativeInfo info;
+	bool ret = PlannerHNS::PlanningHelpers::GetRelativeInfoRange(paths, currPose, 0.75, info);
+	if(ret == true && info.iGlobalPath >= 0 &&  info.iGlobalPath < paths.size() && info.iFront > 0 && info.iFront < paths.at(info.iGlobalPath).size())
+	{
+		double remaining_distance = paths.at(info.iGlobalPath).at(paths.at(info.iGlobalPath).size()-1).cost - (paths.at(info.iGlobalPath).at(info.iFront).cost + info.to_front_distance);
+
+		PlannerHNS::RelativeInfo info_curr;
+		PlannerHNS::PlanningHelpers::GetRelativeInfoLimited(paths.at(info.iGlobalPath), currPose, info_curr, info.iBack);
+
+		//std::cout << "Check End of Path: After: " << info_curr.bAfter << ", Distance: " << remaining_distance << ", param_distance: " << end_range_distance << std::endl;
+		if(info_curr.bAfter == true || remaining_distance < end_range_distance)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void GlobalPlanner::SendAvailableOptionsHMI()
+{
+	if(!m_bFirstStartHMI) return;
+
+	std::vector<PlannerHNS::WayPoint*> branches;
+	if(m_GeneratedTotalPaths.size()>0 && m_GeneratedTotalPaths.at(0).size()>0)
+	{
+		FindIncommingBranches(m_GeneratedTotalPaths,m_CurrentPose, 30, 75, branches);
+	}
+
+	//Options message contains either destination reached option or branches types options
+	PlannerHNS::HMI_MSG msg;
+	if(m_iMessageID > 9999999)
+	{
+		m_iMessageID = 1;
+	}
+	msg.msg_id = m_iMessageID++;
+	msg.bErr = false;
+	msg.type = PlannerHNS::OPTIONS_MSG;
+	if(m_iCurrentGoalIndex >= 0 && m_iCurrentGoalIndex < m_GoalsPos.size())
+	{
+		msg.curr_destination_id = m_GoalsPos.at(m_iCurrentGoalIndex).id;
+	}
+	if(m_iCurrentGoalIndex+1 >= 0 && m_iCurrentGoalIndex+1 < m_GoalsPos.size())
+	{
+		msg.next_destination_id = m_GoalsPos.at(m_iCurrentGoalIndex+1).id;
+	}
+
+	if(branches.size() > 0)
+	{
+		for(unsigned int i = 0; i< branches.size(); i++)
+		{
+			msg.available_actions.push_back(ToMsgAction(branches.at(i)->actionCost.at(0).first));
+		}
+
+		//TODO use current selected global path index , not zero
+		int close_index = PlannerHNS::PlanningHelpers::GetClosestNextPointIndexFast(m_GeneratedTotalPaths.at(0), m_CurrentPose);
+		PlannerHNS::WayPoint* currOptions = 0;
+		for(unsigned int i=close_index+1; i < m_GeneratedTotalPaths.at(0).size(); i++)
+		{
+			bool bFound = false;
+			for(unsigned int j=0; j< branches.size(); j++)
+			{
+				if(branches.at(j)->id == m_GeneratedTotalPaths.at(0).at(i).id)
+				{
+					currOptions = branches.at(j);
+					bFound = true;
+					break;
+				}
+			}
+			if(bFound)
+				break;
+		}
+
+		if(currOptions !=0 )
+		{
+			msg.current_action = ToMsgAction(currOptions->actionCost.at(0).first);
+			//msg.currID = currOptions->laneId;
+		}
+	}
+
+	if(m_bWaitingState) //when waiting we can start from HMI
+	{
+		msg.available_actions.push_back(PlannerHNS::MSG_START_ACTION);
+	}
+	else //if there is an active plan, we can slow down, stop and change destination
+	{
+		msg.available_actions.push_back(PlannerHNS::MSG_SLOWDOWN_ACTION);
+		msg.available_actions.push_back(PlannerHNS::MSG_STOP_ACTION);
+		msg.available_actions.push_back(PlannerHNS::MSG_CHANGE_DESTINATION);
+	}
+
+	if(CheckForEndOfPath(m_GeneratedTotalPaths, m_CurrentPose, m_params.endOfPathDistance) && m_VehicleState.speed < 0.25)
+	{
+		msg.available_actions.push_back(PlannerHNS::MSG_DESTINATION_REACHED);
+	}
+
+	autoware_msgs::State auto_state_msg;
+	auto_state_msg.mission_state = msg.CreateStringMessage();
+	pub_hmi_mission.publish(auto_state_msg);
+}
+
+void GlobalPlanner::VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths)
 {
 	autoware_msgs::LaneArray lane_array;
 	visualization_msgs::MarkerArray pathsToVisualize;
@@ -279,7 +495,7 @@ void GlobalPlanner::VisualizeAndSend(const std::vector<std::vector<PlannerHNS::W
 	PlannerHNS::ROSHelpers::createGlobalLaneArrayOrientationMarker(lane_array, pathsToVisualize);
 	PlannerHNS::ROSHelpers::createGlobalLaneArrayVelocityMarker(lane_array, pathsToVisualize);
 
-	if((m_bFirstStart && m_params.bEnableHMI) || !m_params.bEnableHMI)
+	if((m_bFirstStartHMI && m_params.bEnableHMI) || !m_params.bEnableHMI)
 	{
 		pub_PathsRviz.publish(pathsToVisualize);
 		pub_Paths.publish(lane_array);
@@ -408,7 +624,7 @@ int GlobalPlanner::LoadSimulationData()
 	return nData;
 }
 
-void GlobalPlanner::LoadDestinations(const std::string& fileName, int curr_dst_id)
+void GlobalPlanner::LoadDestinations(const std::string& fileName)
 {
 	std::string dstFileName = fileName;
 	UtilityHNS::DestinationsDataFileReader destination_data(dstFileName);
@@ -416,10 +632,17 @@ void GlobalPlanner::LoadDestinations(const std::string& fileName, int curr_dst_i
 	{
 		m_GoalsPos.clear();
 		PlannerHNS::HMI_MSG dest_msg;
-		dest_msg.msg_id = 1;
+		dest_msg.msg_id = m_iMessageID++;
 		dest_msg.bErr = false;
 		dest_msg.type = PlannerHNS::DESTINATIONS_MSG;
-		dest_msg.curr_destination_id = curr_dst_id;
+		if(m_iCurrentGoalIndex >= 0 && m_iCurrentGoalIndex < m_GoalsPos.size())
+		{
+			dest_msg.curr_destination_id = m_GoalsPos.at(m_iCurrentGoalIndex).id;
+		}
+		if(m_iCurrentGoalIndex+1 >= 0 && m_iCurrentGoalIndex+1 < m_GoalsPos.size())
+		{
+			dest_msg.next_destination_id = m_GoalsPos.at(m_iCurrentGoalIndex+1).id;
+		}
 		PlannerHNS::DESTINATION d;
 		for(auto& x: destination_data.m_data_list)
 		{
@@ -432,18 +655,48 @@ void GlobalPlanner::LoadDestinations(const std::string& fileName, int curr_dst_i
 			p.pos.lon = x.lon;
 			p.pos.lat = x.lat;
 			p.pos.alt = x.alt;
+			p.id = d.id;
 			m_GoalsPos.push_back(p);
 		}
 
 		autoware_msgs::State auto_state_msg;
 		auto_state_msg.mission_state = dest_msg.CreateStringMessage();
 		pub_hmi_mission.publish(auto_state_msg);
-		std::cout << "Read Destinations and send message ! " << std::endl;
+		//std::cout << "Read Destinations and send message ! " << std::endl;
 	}
 	else
 	{
 		std::cout << "Failed Read Destinations and send message ! " << std::endl;
 	}
+}
+
+bool GlobalPlanner::UpdateGoalIndex()
+{
+	if(m_bWaitingState && UtilityHNS::UtilityH::GetTimeDiffNow(m_PlanningTimer) > m_params.waitingTime)
+	{
+		int curr_index = m_iCurrentGoalIndex;
+
+		if(m_params.bEnableReplanning)
+		{
+			m_iCurrentGoalIndex = (m_iCurrentGoalIndex + 1) % m_GoalsPos.size();
+		}
+		else
+		{
+			if(m_iCurrentGoalIndex+1 <  (int)m_GoalsPos.size())
+			{
+				m_iCurrentGoalIndex ++;
+			}
+		}
+
+		if(m_iCurrentGoalIndex != curr_index)
+		{
+			return true;
+		}
+	}
+
+	//std::cout << "Waiting ... " << m_bWaitingState <<  UtilityHNS::UtilityH::GetTimeDiffNow(m_PlanningTimer) << ", " << m_params.waitingTime << ", Goals: " << m_GoalsPos.size() <<   std::endl;
+
+	return false;
 }
 
 void GlobalPlanner::MainLoop()
@@ -455,7 +708,6 @@ void GlobalPlanner::MainLoop()
 	while (ros::ok())
 	{
 		ros::spinOnce();
-		bool bMakeNewPlan = false;
 
 		if(m_params.mapSource == PlannerHNS::MAP_KML_FILE && !m_bKmlMap)
 		{
@@ -499,42 +751,46 @@ void GlobalPlanner::MainLoop()
 			}
 		}
 
-		if(m_GoalsPos.size() > 0)
+		if(m_bKmlMap && m_GoalsPos.size() > 0)
 		{
-			if(m_GeneratedTotalPaths.size() > 0 && m_GeneratedTotalPaths.at(0).size() > 3)
+			bool bMakeNewPlan = false;
+			bool bDestinationReachSend= false;
+
+			if(!m_bWaitingState && CheckForEndOfPath(m_GeneratedTotalPaths, m_CurrentPose, m_params.endOfPathDistance) && m_VehicleState.speed < 0.25)
 			{
-				if(m_params.bEnableReplanning)
-				{
-					PlannerHNS::RelativeInfo info;
-					bool ret = PlannerHNS::PlanningHelpers::GetRelativeInfoRange(m_GeneratedTotalPaths, m_CurrentPose, 0.75, info);
-					if(ret == true && info.iGlobalPath >= 0 &&  info.iGlobalPath < m_GeneratedTotalPaths.size() && info.iFront > 0 && info.iFront < m_GeneratedTotalPaths.at(info.iGlobalPath).size())
-					{
-						double remaining_distance =    m_GeneratedTotalPaths.at(info.iGlobalPath).at(m_GeneratedTotalPaths.at(info.iGlobalPath).size()-1).cost - (m_GeneratedTotalPaths.at(info.iGlobalPath).at(info.iFront).cost + info.to_front_distance);
-						if(remaining_distance <= REPLANNING_DISTANCE)
-						{
-							bMakeNewPlan = true;
-							if(m_GoalsPos.size() > 0)
-								m_iCurrentGoalIndex = (m_iCurrentGoalIndex + 1) % m_GoalsPos.size();
-							std::cout << "Current Goal Index = " << m_iCurrentGoalIndex << std::endl << std::endl;
-						}
-					}
-				}
+				UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
+				m_bWaitingState = true;
+				//std::cout << "Start Waiting State " << std::endl;
+			}
+
+			if(m_params.bEnableHMI)
+			{
+				SendAvailableOptionsHMI();
+				bMakeNewPlan = UpdateGoalWithHMI();
 			}
 			else
-				bMakeNewPlan = true;
-
-			if(bMakeNewPlan)
 			{
+				bMakeNewPlan = UpdateGoalIndex();
+				//std::cout << "Goal Index Updated: " << m_iCurrentGoalIndex << ", New Plan: " << bMakeNewPlan << std::endl;
+			}
+
+			if(m_iCurrentGoalIndex >= 0 && (bMakeNewPlan || m_GeneratedTotalPaths.size() == 0))
+			{
+				std::cout << "Current Goal Index = " << m_iCurrentGoalIndex << std::endl << std::endl;
 				PlannerHNS::WayPoint goalPoint = m_GoalsPos.at(m_iCurrentGoalIndex);
 				bool bNewPlan = GenerateGlobalPlan(m_CurrentPose, goalPoint, m_GeneratedTotalPaths);
 
-
 				if(bNewPlan)
 				{
+					m_bWaitingState = false;
+					m_bReStartState = false;
+					m_bStoppingState = false;
+					m_bSlowDownState = false;
 					bMakeNewPlan = false;
 					VisualizeAndSend(m_GeneratedTotalPaths);
 				}
 			}
+
 			VisualizeDestinations(m_GoalsPos, m_iCurrentGoalIndex);
 		}
 
@@ -651,6 +907,68 @@ void GlobalPlanner::callbackGetVMNodes(const vector_map_msgs::NodeArray& msg)
 	std::cout << "Received Nodes" << msg.data.size() << endl;
 	if(m_MapRaw.pNodes == nullptr)
 		m_MapRaw.pNodes = new UtilityHNS::AisanNodesFileReader(msg);
+}
+
+PlannerHNS::ACTION_TYPE GlobalPlanner::FromMsgAction(const PlannerHNS::MSG_ACTION& msg_action)
+{
+	switch(msg_action)
+	{
+	case PlannerHNS::MSG_FORWARD_ACTION:
+		return PlannerHNS::FORWARD_ACTION;
+	case PlannerHNS::MSG_LEFT_TURN_ACTION:
+		return PlannerHNS::LEFT_TURN_ACTION;
+	case PlannerHNS::MSG_RIGHT_TURN_ACTION:
+		return PlannerHNS::RIGHT_TURN_ACTION;
+	case PlannerHNS::MSG_STOP_ACTION:
+		return PlannerHNS::STOP_ACTION;
+	case PlannerHNS::MSG_SWERVE_ACTION:
+		return PlannerHNS::SWERVE_ACTION;
+	case PlannerHNS::MSG_START_ACTION:
+		return PlannerHNS::START_ACTION;
+	case PlannerHNS::MSG_SLOWDOWN_ACTION:
+		return PlannerHNS::SLOWDOWN_ACTION;
+	case PlannerHNS::MSG_BACKWARD_ACTION:
+		return PlannerHNS::BACKWARD_ACTION;
+	case PlannerHNS::MSG_CHANGE_DESTINATION:
+		return PlannerHNS::CHANGE_DESTINATION;
+	case PlannerHNS::MSG_WAITING_ACTION:
+		return PlannerHNS::WAITING_ACTION;
+	case PlannerHNS::MSG_DESTINATION_REACHED:
+		return PlannerHNS::DESTINATION_REACHED;
+	default:
+		return PlannerHNS::UNKOWN_ACTION;
+	}
+}
+
+PlannerHNS::MSG_ACTION GlobalPlanner::ToMsgAction(const PlannerHNS::ACTION_TYPE& action)
+{
+	switch(action)
+	{
+	case PlannerHNS::FORWARD_ACTION:
+		return PlannerHNS::MSG_FORWARD_ACTION;
+	case PlannerHNS::LEFT_TURN_ACTION:
+		return PlannerHNS::MSG_LEFT_TURN_ACTION;
+	case PlannerHNS::RIGHT_TURN_ACTION:
+		return PlannerHNS::MSG_RIGHT_TURN_ACTION;
+	case PlannerHNS::STOP_ACTION:
+		return PlannerHNS::MSG_STOP_ACTION;
+	case PlannerHNS::SWERVE_ACTION:
+		return PlannerHNS::MSG_SWERVE_ACTION;
+	case PlannerHNS::START_ACTION:
+		return PlannerHNS::MSG_START_ACTION;
+	case PlannerHNS::SLOWDOWN_ACTION:
+		return PlannerHNS::MSG_SLOWDOWN_ACTION;
+	case PlannerHNS::BACKWARD_ACTION:
+		return PlannerHNS::MSG_BACKWARD_ACTION;
+	case PlannerHNS::CHANGE_DESTINATION:
+		return PlannerHNS::MSG_CHANGE_DESTINATION;
+	case PlannerHNS::WAITING_ACTION:
+		return PlannerHNS::MSG_WAITING_ACTION;
+	case PlannerHNS::DESTINATION_REACHED:
+		return PlannerHNS::MSG_DESTINATION_REACHED;
+	default:
+		return PlannerHNS::MSG_FORWARD_ACTION;
+	}
 }
 
 }

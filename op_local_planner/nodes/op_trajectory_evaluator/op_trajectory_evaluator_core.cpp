@@ -177,6 +177,7 @@ void TrajectoryEvalCore::callbackGetGlobalPlannerPath(const autoware_msgs::LaneA
 		{
 			if(bEnableSmoothGlobalPathForCARLA)
 			{
+				m_prev_index.clear();
 				for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
 				{
 					PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
@@ -185,17 +186,19 @@ void TrajectoryEvalCore::callbackGetGlobalPlannerPath(const autoware_msgs::LaneA
 					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
 					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
 					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+					m_prev_index.push_back(0);
 				}
 			}
 			else
 			{
+				m_prev_index.clear();
 				for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
 				{
 					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+					m_prev_index.push_back(0);
 				}
 			}
 
-			m_prev_index.push_back(0);
 			bWayGlobalPath = true;
 			std::cout << "Received New Global Path Evaluator ! " << std::endl;
 		}
