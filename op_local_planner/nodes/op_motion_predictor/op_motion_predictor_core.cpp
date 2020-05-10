@@ -480,18 +480,21 @@ void MotionPrediction::MainLoop()
 			bMap = true;
 			PlannerHNS::KmlMapLoader kml_loader;
 			kml_loader.LoadKML(m_MapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 		}
 		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
 		{
 			bMap = true;
 			PlannerHNS::VectorMapLoader vec_loader;
 			vec_loader.LoadFromFile(m_MapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 		}
 		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
 		{
 			bMap = true;
 			PlannerHNS::Lanelet2MapLoader map_loader;
 			map_loader.LoadMap(m_MapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 		}
 		else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
 		{
@@ -500,6 +503,7 @@ void MotionPrediction::MainLoop()
 				bMap = true;
 				PlannerHNS::VectorMapLoader vec_loader;
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
+				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			}
 		}
 
@@ -527,6 +531,7 @@ void MotionPrediction::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin&
 {
 	PlannerHNS::Lanelet2MapLoader map_loader;
 	map_loader.LoadMap(msg, m_Map);
+	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 	bMap = true;
 }
 

@@ -714,6 +714,7 @@ void GlobalPlanner::MainLoop()
 			m_bKmlMap = true;
 			PlannerHNS::KmlMapLoader kml_loader;
 			kml_loader.LoadKML(m_params.mapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
 			pub_MapRviz.publish(map_marker_array);
@@ -723,9 +724,9 @@ void GlobalPlanner::MainLoop()
 			m_bKmlMap = true;
 			PlannerHNS::VectorMapLoader vec_loader;
 			vec_loader.LoadFromFile(m_params.mapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
-
 			pub_MapRviz.publish(map_marker_array);
 		}
 		else if (m_params.mapSource == PlannerHNS::MAP_LANELET_2 && !m_bKmlMap)
@@ -733,6 +734,7 @@ void GlobalPlanner::MainLoop()
 			m_bKmlMap = true;
 			PlannerHNS::Lanelet2MapLoader map_loader;
 			map_loader.LoadMap(m_params.mapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 		}
 		else if (m_params.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bKmlMap)
 		{
@@ -741,6 +743,7 @@ void GlobalPlanner::MainLoop()
 				m_bKmlMap = true;
 				PlannerHNS::VectorMapLoader vec_loader;
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
+				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			}
 
 			if(m_bKmlMap)
@@ -804,7 +807,7 @@ void GlobalPlanner::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& ms
 {
 	PlannerHNS::Lanelet2MapLoader map_loader;
 	map_loader.LoadMap(msg, m_Map);
-
+	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 	m_bKmlMap = true;
 	visualization_msgs::MarkerArray map_marker_array;
 	PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);

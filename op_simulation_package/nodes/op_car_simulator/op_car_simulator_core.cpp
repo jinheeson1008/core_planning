@@ -826,6 +826,7 @@ void OpenPlannerCarSimulator::MainLoop()
 			m_bMap = true;
 			PlannerHNS::KmlMapLoader kml_loader;
 			kml_loader.LoadKML(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			InitializeSimuCar(m_SimParams.startPose);
 		}
 		else if (m_SimParams.mapSource == PlannerHNS::MAP_FOLDER && !m_bMap)
@@ -833,6 +834,7 @@ void OpenPlannerCarSimulator::MainLoop()
 			m_bMap = true;
 			PlannerHNS::VectorMapLoader vec_loader;
 			vec_loader.LoadFromFile(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			InitializeSimuCar(m_SimParams.startPose);
 		}
 		else if (m_SimParams.mapSource == PlannerHNS::MAP_LANELET_2 && !m_bMap)
@@ -840,6 +842,7 @@ void OpenPlannerCarSimulator::MainLoop()
 			m_bMap = true;
 			PlannerHNS::Lanelet2MapLoader map_loader;
 			map_loader.LoadMap(m_SimParams.KmlMapPath, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 		}
 		else if (m_SimParams.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bMap)
 		{
@@ -847,6 +850,7 @@ void OpenPlannerCarSimulator::MainLoop()
 			{
 				PlannerHNS::VectorMapLoader vec_loader;
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
+				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 				if(m_Map.roadSegments.size() > 0)
 				{
 					m_bMap = true;
