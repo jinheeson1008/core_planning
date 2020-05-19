@@ -832,7 +832,7 @@ void OpenPlannerCarSimulator::MainLoop()
 		else if (m_SimParams.mapSource == PlannerHNS::MAP_FOLDER && !m_bMap)
 		{
 			m_bMap = true;
-			PlannerHNS::VectorMapLoader vec_loader;
+			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
 			vec_loader.LoadFromFile(m_SimParams.KmlMapPath, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			InitializeSimuCar(m_SimParams.startPose);
@@ -848,7 +848,7 @@ void OpenPlannerCarSimulator::MainLoop()
 		{
 			if(m_MapRaw.AreMessagesReceived())
 			{
-				PlannerHNS::VectorMapLoader vec_loader;
+				PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
 				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 				if(m_Map.roadSegments.size() > 0)

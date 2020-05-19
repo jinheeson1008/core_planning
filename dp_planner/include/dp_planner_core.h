@@ -223,6 +223,7 @@ public:
   PlannerX();
   ~PlannerX();
   void PlannerMainLoop();
+  bool m_bEnableLaneChange;
 
 protected:
   //Helper Functions

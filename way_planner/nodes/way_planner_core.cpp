@@ -577,7 +577,7 @@ void way_planner_core::PlannerMainLoop()
 		else if (m_params.mapSource == MAP_FOLDER && !m_bKmlMap)
 		{
 			m_bKmlMap = true;
-			PlannerHNS::VectorMapLoader vec_loader;
+			PlannerHNS::VectorMapLoader vec_loader(1, m_params.bEnableLaneChange);
 			vec_loader.LoadFromFile(m_params.KmlMapPath, m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
 			ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
@@ -593,7 +593,7 @@ void way_planner_core::PlannerMainLoop()
 
 				UtilityHNS::MapRaw map_raw;
 				map_raw.LoadFromData(m_AwMap.lanes, m_AwMap.dtlanes, m_AwMap.points);
-				PlannerHNS::VectorMapLoader vec_loader;
+				PlannerHNS::VectorMapLoader vec_loader(1, m_params.bEnableLaneChange);
 				vec_loader.LoadFromData(map_raw, m_Map);
 				visualization_msgs::MarkerArray map_marker_array;
 				ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);

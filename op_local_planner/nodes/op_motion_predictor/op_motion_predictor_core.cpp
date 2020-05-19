@@ -485,7 +485,7 @@ void MotionPrediction::MainLoop()
 		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
 		{
 			bMap = true;
-			PlannerHNS::VectorMapLoader vec_loader;
+			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
 			vec_loader.LoadFromFile(m_MapPath, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 		}
@@ -501,7 +501,7 @@ void MotionPrediction::MainLoop()
 			if(m_MapRaw.AreMessagesReceived())
 			{
 				bMap = true;
-				PlannerHNS::VectorMapLoader vec_loader;
+				PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
 				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			}

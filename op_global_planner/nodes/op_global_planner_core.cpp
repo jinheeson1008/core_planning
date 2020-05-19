@@ -722,7 +722,7 @@ void GlobalPlanner::MainLoop()
 		else if (m_params.mapSource == PlannerHNS::MAP_FOLDER && !m_bKmlMap)
 		{
 			m_bKmlMap = true;
-			PlannerHNS::VectorMapLoader vec_loader;
+			PlannerHNS::VectorMapLoader vec_loader(1, m_params.bEnableLaneChange);
 			vec_loader.LoadFromFile(m_params.mapPath, m_Map);
 			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			visualization_msgs::MarkerArray map_marker_array;
@@ -741,7 +741,7 @@ void GlobalPlanner::MainLoop()
 			if(m_MapRaw.AreMessagesReceived())
 			{
 				m_bKmlMap = true;
-				PlannerHNS::VectorMapLoader vec_loader;
+				PlannerHNS::VectorMapLoader vec_loader(1, m_params.bEnableLaneChange);
 				vec_loader.LoadFromData(m_MapRaw, m_Map);
 				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
 			}

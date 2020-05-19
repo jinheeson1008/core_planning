@@ -72,6 +72,7 @@ PlannerX::PlannerX()
 	m_ObstacleTracking.m_MAX_ASSOCIATION_DISTANCE = 2.0;
 	m_ObstacleTracking.m_dt = 0.12;
 	m_ObstacleTracking.m_bUseCenterOnly = true;
+	m_bEnableLaneChange = false;
 
 	int iSource = 0;
 	nh.getParam("/dp_planner/mapSource", iSource);
@@ -238,6 +239,7 @@ void PlannerX::UpdatePlanningParams()
 	nh.getParam("/dp_planner/verticalSafetyDistance", params.verticalSafetyDistance);
 
 	nh.getParam("/dp_planner/enableLaneChange", params.enableLaneChange);
+	m_bEnableLaneChange = params.enableLaneChange;
 	nh.getParam("/dp_planner/enabTrajectoryVelocities", params.enabTrajectoryVelocities);
 
 	nh.getParam("/dp_planner/enableObjectTracking", m_bEnableTracking);
@@ -618,7 +620,7 @@ void PlannerX::PlannerMainLoop()
 		else if(m_MapSource == MAP_FOLDER && !bKmlMapLoaded)
 		{
 			bKmlMapLoaded = true;
-			PlannerHNS::VectorMapLoader vec_loader;
+			PlannerHNS::VectorMapLoader vec_loader(1, m_bEnableLaneChange);
 			vec_loader.LoadFromFile(m_KmlMapPath, m_Map);
 		}
 		else if(m_MapSource == MAP_AUTOWARE)
@@ -631,7 +633,7 @@ void PlannerX::PlannerMainLoop()
 
 				 UtilityHNS::MapRaw map_raw;
 				map_raw.LoadFromData(m_AwMap.lanes, m_AwMap.dtlanes, m_AwMap.points);
-				PlannerHNS::VectorMapLoader vec_loader;
+				PlannerHNS::VectorMapLoader vec_loader(1, m_bEnableLaneChange);
 				vec_loader.LoadFromData(map_raw, m_Map);
 				 std::cout << "Converting Vector Map Time : " <<UtilityHNS::UtilityH::GetTimeDiffNow(timerTemp) << std::endl;
 				 //sub_WayPlannerPaths = nh.subscribe("/lane_waypoints_array", 	10,		&PlannerX::callbackGetWayPlannerPath, 	this);
