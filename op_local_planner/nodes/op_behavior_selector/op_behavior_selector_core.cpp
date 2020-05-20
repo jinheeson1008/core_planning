@@ -596,10 +596,13 @@ void BehaviorGen::SendLocalPlanningTopics()
 	PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_BehaviorGenerator.m_Path, m_CurrentTrajectoryToSend, info.iBack);
 	//std::cout << "Path Size: " << m_BehaviorGenerator.m_Path.size() << ", Send Size: " << m_CurrentTrajectoryToSend << std::endl;
 
-	closest_waypoint.data = 1;
-	pub_ClosestIndex.publish(closest_waypoint);
-	pub_LocalBasePath.publish(m_CurrentTrajectoryToSend);
-	pub_LocalPath.publish(m_CurrentTrajectoryToSend);
+	if(m_CurrentTrajectoryToSend.waypoints.size() > 2)
+	{
+		closest_waypoint.data = 1;
+		pub_ClosestIndex.publish(closest_waypoint);
+		pub_LocalBasePath.publish(m_CurrentTrajectoryToSend);
+		pub_LocalPath.publish(m_CurrentTrajectoryToSend);
+	}
 
 	if(m_CurrentBehavior.bNewPlan)
 	{
