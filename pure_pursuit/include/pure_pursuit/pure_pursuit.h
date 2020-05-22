@@ -67,7 +67,14 @@ public:
   // for debug on ROS
   geometry_msgs::Point getPoseOfNextWaypoint() const
   {
-    return current_waypoints_.at(next_waypoint_number_).pose.pose.position;
+	  if(next_waypoint_number_ >= 0 && next_waypoint_number_ < current_waypoints_.size())
+	  {
+		  return current_waypoints_.at(next_waypoint_number_).pose.pose.position;
+	  }
+	  else
+	  {
+		  return geometry_msgs::Point();
+	  }
   }
   geometry_msgs::Point getPoseOfNextTarget() const
   {

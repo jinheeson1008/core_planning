@@ -286,6 +286,11 @@ void PurePursuitNode::callbackFromCurrentVelocity(
 void PurePursuitNode::callbackFromWayPoints(
   const autoware_msgs::LaneConstPtr& msg)
 {
+	if(msg->waypoints.empty() || msg->waypoints.size() == 0)
+	{
+		return;
+	}
+
   command_linear_velocity_ =
     (!msg->waypoints.empty()) ? msg->waypoints.at(0).twist.twist.linear.x : 0;
   if (add_virtual_end_waypoints_)
