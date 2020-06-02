@@ -90,17 +90,6 @@ FFSteerControl::FFSteerControl()
 	m_bOutsideControl = 0;
 
 
-#ifdef ENABLE_ZMP_LIBRARY_LINK
-	m_pComm = 0;
-	if(m_CmdParams.statusSource == CONTROL_BOX_STATUS)
-	{
-		m_pComm = new HevComm();
-		m_pComm->InitializeComm(m_CarInfo);
-		m_pComm->StartComm();
-	}
-#endif
-
-
 	tf::StampedTransform transform;
 	GetTransformFromTF("map", "world", transform);
 	ROS_INFO("Origin : x=%f, y=%f, z=%f", transform.getOrigin().x(),transform.getOrigin().y(), transform.getOrigin().z());
@@ -110,8 +99,8 @@ FFSteerControl::FFSteerControl()
 	m_OriginPos.position.z  = transform.getOrigin().z();
 
 
-	pub_VelocityAutoware 		= nh.advertise<geometry_msgs::TwistStamped>("twist_raw", 100);
-	pub_StatusAutoware 			= nh.advertise<std_msgs::Bool>("wf_stat", 100);
+	pub_VelocityAutoware 		= nh.advertise<geometry_msgs::TwistStamped>("twist_raw", 10);
+	pub_StatusAutoware 			= nh.advertise<std_msgs::Bool>("wf_stat", 10);
 
 	//For rviz visualization
 	pub_CurrPoseRviz			= nh.advertise<visualization_msgs::Marker>("curr_simu_pose", 100);
@@ -190,10 +179,6 @@ void FFSteerControl::ReadParamFromLaunchFile(PlannerHNS::CAR_BASIC_INFO& m_CarIn
 
 FFSteerControl::~FFSteerControl()
 {
-#ifdef ENABLE_ZMP_LIBRARY_LINK
-	if(m_pComm)
-		delete m_pComm;
-#endif
 }
 
 void FFSteerControl::callbackGetOutsideControl(const std_msgs::Int8& msg)
@@ -423,11 +408,7 @@ PlannerHNS::BehaviorState FFSteerControl::ConvertBehaviorStateFromAutowareToPlan
 void FFSteerControl::PlannerMainLoop()
 {
 
-	ros::Rate loop_rate(100);
-#ifdef ENABLE_ZMP_LIBRARY_LINK
-	if(m_pComm)
-		m_pComm->GoLive(true);
-#endif
+	ros::Rate loop_rate(50);
 
 	vector<PlannerHNS::WayPoint> path;
 	PlannerHNS::WayPoint p2;
@@ -449,35 +430,7 @@ void FFSteerControl::PlannerMainLoop()
 			 */
 			if(m_CmdParams.statusSource == CONTROL_BOX_STATUS)
 			{
-				//Read StateData From Control Box
-#ifdef ENABLE_ZMP_LIBRARY_LINK
-				if(m_pComm && m_pComm->IsAuto())
-				{
-					m_CurrVehicleStatus.steer = m_pComm->GetCurrentSteerAngle();
-					m_CurrVehicleStatus.speed = m_pComm->GetCurrentSpeed();
-					m_CurrVehicleStatus.shift = m_pComm->GetCurrentShift();
 
-					//Send status over message to planner
-					nav_msgs::Odometry control_box_status;
-					control_box_status.header.stamp = ros::Time::now();
-					control_box_status.twist.twist.angular.z = m_CurrVehicleStatus.steer;
-					control_box_status.twist.twist.linear.x = m_CurrVehicleStatus.speed;
-					control_box_status.twist.twist.linear.z = (int)m_CurrVehicleStatus.shift;
-
-					control_box_status.pose.pose.position.x = m_CurrentPos.pos.x;
-					control_box_status.pose.pose.position.y = m_CurrentPos.pos.y;
-					control_box_status.pose.pose.position.z = m_CurrentPos.pos.z;
-					control_box_status.pose.pose.orientation = tf::createQuaternionMsgFromYaw(UtilityHNS::UtilityH::SplitPositiveAngle(m_CurrentPos.pos.a));
-
-					pub_ControlBoxOdom.publish(control_box_status);
-
-					cout << "Read Live Car Info .. " << endl;
-				}
-				else
-				{
-					cout << ">>> Error, Disconnected from Car Control Box !" << endl;
-				}
-#endif
 			}
 			else if(m_CmdParams.statusSource == SIMULATION_STATUS)
 			{
@@ -565,20 +518,6 @@ void FFSteerControl::PlannerMainLoop()
 
 			if(m_CmdParams.statusSource == CONTROL_BOX_STATUS) //send directly to ZMP control box
 			{
-#ifdef ENABLE_ZMP_LIBRARY_LINK
-				if(m_pComm && m_pComm->IsAuto())
-				{
-					m_pComm->SetNormalizedSteeringAngle(m_PrevStepTargetStatus.steer);
-					m_pComm->SetNormalizedSpeed(m_PrevStepTargetStatus.speed);
-					m_pComm->SetShift(m_PrevStepTargetStatus.shift);
-					cout << "Sending Data to Control Box (" <<m_PrevStepTargetStatus.steer << ", " << m_PrevStepTargetStatus.speed
-							<< ", " << m_PrevStepTargetStatus.shift << ")" << endl;
-				}
-				else
-				{
-					cout << ">>> Error, Disconnected from Car Control Box !" << endl;
-				}
-#endif
 			}
 			else if(m_CmdParams.statusSource == ROBOT_STATUS)
 			{

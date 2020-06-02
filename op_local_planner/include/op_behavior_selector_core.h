@@ -51,7 +51,7 @@
 #include "op_planner/DecisionMaker.h"
 #include "op_utility/DataRW.h"
 
-#define _LOG_LOCAL_PLANNING_DATA
+#define LOG_LOCAL_PLANNING_DATA
 
 namespace BehaviorGeneratorNS
 {
@@ -63,7 +63,6 @@ protected: //Planning Related variables
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::WayPoint m_CurrentPos;
 	bool bNewCurrentPos;
-	bool m_bEnableSpecialCARLACode;
 
 	PlannerHNS::VehicleState m_VehicleStatus;
 	bool bVehicleStatus;

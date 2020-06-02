@@ -35,7 +35,6 @@ BehaviorGen::BehaviorGen()
 	bBestCost = false;
 	bMap = false;
 	bRollOuts = false;
-	m_bEnableSpecialCARLACode = false;
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
@@ -397,19 +396,18 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayCons
 		}
 
 		// For CARLA challenge
-		if(m_bEnableSpecialCARLACode)
+#ifndef DISABLE_CARLA_SPECIAL_CODE
+		if(m_RollOuts.size() > 1)
 		{
-			if(m_RollOuts.size() > 1)
-			{
-				m_PlanningParams.enableSwerving = true;
-				m_PlanningParams.rollOutNumber = m_RollOuts.size() - 1;
-			}
-			else
-			{
-				m_PlanningParams.enableSwerving = false;
-				m_PlanningParams.rollOutNumber = 0;
-			}
+			m_PlanningParams.enableSwerving = true;
+			m_PlanningParams.rollOutNumber = m_RollOuts.size() - 1;
 		}
+		else
+		{
+			m_PlanningParams.enableSwerving = false;
+			m_PlanningParams.rollOutNumber = 0;
+		}
+#endif
 
 		if(bWayGlobalPath && m_GlobalPaths.size() > 0)
 		{
@@ -623,13 +621,14 @@ void BehaviorGen::SendLocalPlanningTopics()
 
 void BehaviorGen::LogLocalPlanningInfo(double dt)
 {
-	//just for carla
-	if(m_bEnableSpecialCARLACode)
+
+#ifndef DISABLE_CARLA_SPECIAL_CODE //just for carla
+	int curr_lucky_index = 0;
+	if(m_BehaviorGenerator.m_prev_index.size() > 0)
 	{
-		int curr_lucky_index = 0;
-		if(m_BehaviorGenerator.m_prev_index.size() > 0)
-			curr_lucky_index = m_BehaviorGenerator.m_prev_index.at(0);
+		curr_lucky_index = m_BehaviorGenerator.m_prev_index.at(0);
 	}
+#endif
 
 	timespec log_t;
 	UtilityHNS::UtilityH::GetTickCount(log_t);
@@ -756,11 +755,9 @@ void BehaviorGen::MainLoop()
 				x.lightType = m_CurrLightStatus;
 			}
 
-			// just for CARLA 
-			if(m_bEnableSpecialCARLACode)
-			{
-				m_BehaviorGenerator.UpdateAvoidanceParams(m_PlanningParams.enableSwerving, m_PlanningParams.rollOutNumber);
-			}
+#ifndef DISABLE_CARLA_SPECIAL_CODE //just for carla
+			m_BehaviorGenerator.UpdateAvoidanceParams(m_PlanningParams.enableSwerving, m_PlanningParams.rollOutNumber);
+#endif
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
 			SendLocalPlanningTopics();

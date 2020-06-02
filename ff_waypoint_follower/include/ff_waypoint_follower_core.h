@@ -17,8 +17,6 @@
 #ifndef ff_waypoint_follower_CORE_H
 #define ff_waypoint_follower_CORE_H
 
-#define _ENABLE_ZMP_LIBRARY_LINK
-
 // ROS includes
 #include <ros/ros.h>
 
@@ -37,11 +35,6 @@
 #include "op_planner/LocalPlannerH.h"
 #include "op_planner/PlannerH.h"
 #include "op_planner/MappingHelpers.h"
-
-
-#ifdef ENABLE_ZMP_LIBRARY_LINK
-#include "HevComm.h"
-#endif
 
 namespace FFSteerControlNS
 {
@@ -83,9 +76,6 @@ public:
 class FFSteerControl
 {
 protected:
-#ifdef ENABLE_ZMP_LIBRARY_LINK
-	HevComm* m_pComm;
-#endif
 
 	//bool m_bReadyToPlan;
 	timespec m_Timer;
