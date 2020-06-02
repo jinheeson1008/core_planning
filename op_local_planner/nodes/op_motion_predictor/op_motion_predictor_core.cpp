@@ -68,7 +68,7 @@ MotionPrediction::MotionPrediction()
 
 	UtilityHNS::UtilityH::GetTickCount(m_VisualizationTimer);
 	PlannerHNS::ROSHelpers::InitPredMarkers(100, m_PredictedTrajectoriesDummy);
-	PlannerHNS::ROSHelpers::InitCurbsMarkers(100, m_CurbsDummy);
+	PlannerHNS::ROSHelpers::InitCurbsMarkers(500, m_CurbsDummy);
 	PlannerHNS::ROSHelpers::InitPredParticlesMarkers(1000, m_PredictedParticlesDummy);
 	PlannerHNS::ROSHelpers::InitPredParticlesMarkers(2000, m_GeneratedParticlesDummy, true);
 
@@ -313,6 +313,8 @@ void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedOb
 		{
 			curr_curbs_obstacles.clear();
 			GenerateCurbsObstacles(curr_curbs_obstacles);
+			PlannerHNS::ROSHelpers::ConvertCurbsMarkers(curr_curbs_obstacles, m_CurbsActual, m_CurbsDummy);
+			pub_CurbsRviz.publish(m_CurbsActual);
 			//std::cout << "Curbs No: " << curr_curbs_obstacles.size() << endl;
 			for(unsigned int i = 0 ; i <curr_curbs_obstacles.size(); i++)
 			{
@@ -329,37 +331,36 @@ void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedOb
 void MotionPrediction::GenerateCurbsObstacles(std::vector<PlannerHNS::DetectedObject>& curb_obstacles)
 {
 	if(!bNewCurrentPos) return;
+	PlannerHNS::DetectedObject obj;
 
 	for(unsigned int ic = 0; ic < m_Map.curbs.size(); ic++)
 	{
-
-		if(m_Map.curbs.at(ic).points.size() > 0)
+		bool bCloseCurb = false;
+		for(unsigned int icp=0; icp< m_Map.curbs.at(ic).points.size(); icp++)
 		{
-			PlannerHNS::DetectedObject obj;
-			obj.center = m_Map.curbs.at(ic).points.at(0);
+			PlannerHNS::WayPoint* pP = &m_Map.curbs.at(ic).points.at(icp);
+			double distance = hypot(m_CurrentPos.pos.y - pP->pos.y, m_CurrentPos.pos.x - pP->pos.x);
 
-			if(curb_obstacles.size()>0)
+			if(distance < m_PlanningParams.microPlanDistance)
 			{
-				double distance_to_prev = hypot(curb_obstacles.at(curb_obstacles.size()-1).center.pos.y-obj.center.pos.y, curb_obstacles.at(curb_obstacles.size()-1).center.pos.x-obj.center.pos.x);
-				if(distance_to_prev < m_DistanceBetweenCurbs)
-					continue;
+				bCloseCurb = true;
+				break;
 			}
+		}
 
-			double longitudinalDist = hypot(m_CurrentPos.pos.y -obj.center.pos.y, m_CurrentPos.pos.x-obj.center.pos.x);
-
-			if(longitudinalDist > m_PlanningParams.horizonDistance)
-				continue;
-
+		if(bCloseCurb)
+		{
+			obj.contour.clear();
+			for(auto& p: m_Map.curbs.at(ic).points)
+			{
+				obj.contour.push_back(p.pos);
+			}
+			PlannerHNS::PlanningHelpers::FixPathDensity(obj.contour, m_DistanceBetweenCurbs);
 			obj.bDirection = false;
 			obj.bVelocity = false;
 			obj.id = -1;
 			obj.t  = PlannerHNS::SIDEWALK;
 			obj.label = "curb";
-			for(unsigned int icp=0; icp< m_Map.curbs.at(ic).points.size(); icp++)
-			{
-				obj.contour.push_back(m_Map.curbs.at(ic).points.at(icp).pos);
-			}
-
 			curb_obstacles.push_back(obj);
 		}
 	}
@@ -374,8 +375,7 @@ void MotionPrediction::VisualizePrediction()
 //	PlannerHNS::ROSHelpers::ConvertPredictedTrqajectoryMarkers(m_all_pred_paths, m_PredictedTrajectoriesActual, m_PredictedTrajectoriesDummy);
 //	pub_PredictedTrajectoriesRviz.publish(m_PredictedTrajectoriesActual);
 //
-	PlannerHNS::ROSHelpers::ConvertCurbsMarkers(curr_curbs_obstacles, m_CurbsActual, m_CurbsDummy);
-	pub_CurbsRviz.publish(m_CurbsActual);
+
 
 	m_all_pred_paths.clear();
 	m_particles_points.clear();
