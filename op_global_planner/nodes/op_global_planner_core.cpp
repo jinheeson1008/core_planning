@@ -35,6 +35,7 @@ GlobalPlanner::GlobalPlanner()
 	m_bSlowDownState = false;
 	m_bStoppingState = false;
 	m_bReStartState = false;
+	m_bDestinationError = false;
 	m_GlobalPathID = 1;
 	UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
 
@@ -179,17 +180,20 @@ void GlobalPlanner::callbackGetHMIState(const autoware_msgs::StateConstPtr& msg)
 		if(inc_msg.current_action == PlannerHNS::MSG_START_ACTION || inc_msg.current_action == PlannerHNS::MSG_CHANGE_DESTINATION)
 		{
 			m_bFirstStartHMI = true;
-			m_bReStartState = true;
+			if(m_bSlowDownState || m_bStoppingState)
+			{
+				m_bReStartState = true;
+			}
 			m_bSlowDownState = false;
 			m_bStoppingState = false;
 			m_HMIDestinationID = inc_msg.curr_destination_id;
-			std::cout << " >>>>> Go Go Go ! " <<  std::endl;
+			//std::cout << " >>>>> Go Go Go ! " <<  std::endl;
 		}
 		else if(inc_msg.current_action == PlannerHNS::MSG_SLOWDOWN_ACTION)
 		{
 			m_bSlowDownState = true;
 		}
-		else if(inc_msg.current_action == PlannerHNS::MSG_SLOWDOWN_ACTION)
+		else if(inc_msg.current_action == PlannerHNS::MSG_STOP_ACTION)
 		{
 			m_bStoppingState = true;
 			m_bSlowDownState = false;
@@ -204,10 +208,36 @@ bool GlobalPlanner::UpdateGoalWithHMI()
 		return true;
 	}
 	else
+		if(m_GoalsPos.size() == 1)
 	{
+		if(m_GoalsPos.at(0).id == m_HMIDestinationID)
+		{
+			m_iCurrentGoalIndex = 0;
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+	else if(m_GoalsPos.size() > 1)
+	{
+		if(m_iCurrentGoalIndex == ((int)m_GoalsPos.size()-1) && m_GoalsPos.at(0).id == m_HMIDestinationID) // Can only Go to first destination from last
+		{
+			if(m_bWaitingState)
+			{
+				m_iCurrentGoalIndex = 0;
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+		}
+
 		for(unsigned int i=0; i < m_GoalsPos.size(); i++)
 		{
-			if(m_GoalsPos.at(i).id == m_HMIDestinationID && i > m_iCurrentGoalIndex)
+			if(m_GoalsPos.at(i).id == m_HMIDestinationID && m_iCurrentGoalIndex < i) // Don't Go Backwards, don't change to same destination again
 			{
 				m_iCurrentGoalIndex = i;
 				return true;
@@ -408,8 +438,23 @@ void GlobalPlanner::SendAvailableOptionsHMI()
 	{
 		m_iMessageID = 1;
 	}
+
 	msg.msg_id = m_iMessageID++;
 	msg.bErr = false;
+	if(m_bDestinationError == true)
+	{
+		msg.bErr = true;
+		std::ostringstream err_str;
+		if(m_iCurrentGoalIndex < m_GoalsPos.size())
+		{
+			err_str << "Invalid request. Can't Change destination from: " << m_GoalsPos.at(m_iCurrentGoalIndex).id << " To: " << m_HMIDestinationID;
+		}
+		else
+		{
+			err_str << "Invalid operation. Destination index: " << m_iCurrentGoalIndex << " Out of range: " << m_GoalsPos.size();
+		}
+		msg.err_msg = err_str.str();
+	}
 	msg.type = PlannerHNS::OPTIONS_MSG;
 	if(m_iCurrentGoalIndex >= 0 && m_iCurrentGoalIndex < m_GoalsPos.size())
 	{
@@ -763,7 +808,6 @@ void GlobalPlanner::MainLoop()
 			{
 				UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
 				m_bWaitingState = true;
-				//std::cout << "Start Waiting State " << std::endl;
 			}
 
 			if(m_params.bEnableHMI)

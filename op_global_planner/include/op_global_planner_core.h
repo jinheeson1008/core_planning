@@ -113,6 +113,7 @@ protected:
 	bool m_bSlowDownState;
 	bool m_bStoppingState;
 	bool m_bReStartState;
+	bool m_bDestinationError;
 	timespec m_PlanningTimer;
 
 	ros::NodeHandle nh;
