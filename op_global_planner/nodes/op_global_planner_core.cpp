@@ -107,16 +107,16 @@ GlobalPlanner::GlobalPlanner()
 		LoadSimulationData();
 	}
 
-	sub_current_pose = nh.subscribe("/current_pose", 10, &GlobalPlanner::callbackGetCurrentPose, this);
+	sub_current_pose = nh.subscribe("/current_pose", 1, &GlobalPlanner::callbackGetCurrentPose, this);
 
 	int bVelSource = 1;
 	nh.getParam("/op_global_planner/velocitySource", bVelSource);
 	if(bVelSource == 0)
-		sub_robot_odom = nh.subscribe("/odom", 10, &GlobalPlanner::callbackGetRobotOdom, this);
+		sub_robot_odom = nh.subscribe("/odom", 1, &GlobalPlanner::callbackGetRobotOdom, this);
 	else if(bVelSource == 1)
-		sub_current_velocity = nh.subscribe("/current_velocity", 10, &GlobalPlanner::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &GlobalPlanner::callbackGetVehicleStatus, this);
 	else if(bVelSource == 2)
-		sub_can_info = nh.subscribe("/can_info", 10, &GlobalPlanner::callbackGetCANInfo, this);
+		sub_can_info = nh.subscribe("/can_info", 1, &GlobalPlanner::callbackGetCANInfo, this);
 
 	//Mapping Section
 	if(m_params.mapSource == PlannerHNS::MAP_AUTOWARE)
@@ -180,7 +180,7 @@ void GlobalPlanner::callbackGetHMIState(const autoware_msgs::StateConstPtr& msg)
 		if(inc_msg.current_action == PlannerHNS::MSG_START_ACTION || inc_msg.current_action == PlannerHNS::MSG_CHANGE_DESTINATION)
 		{
 			m_bFirstStartHMI = true;
-			if(m_bSlowDownState || m_bStoppingState)
+			if(m_bSlowDownState || m_bStoppingState || m_iCurrentGoalIndex == 0)
 			{
 				m_bReStartState = true;
 			}
@@ -207,8 +207,7 @@ bool GlobalPlanner::UpdateGoalWithHMI()
 	{
 		return true;
 	}
-	else
-		if(m_GoalsPos.size() == 1)
+	else if(m_GoalsPos.size() == 1)
 	{
 		if(m_GoalsPos.at(0).id == m_HMIDestinationID)
 		{
@@ -575,8 +574,8 @@ void GlobalPlanner::VisualizeDestinations(std::vector<PlannerHNS::WayPoint>& des
 		marker.ns = "HMI_Destinations";
 		marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
 		marker.action = visualization_msgs::Marker::ADD;
-		marker.scale.x = 3.25;
-		marker.scale.y = 3.25;
+		//marker.scale.x = 3.25;
+		//marker.scale.y = 3.25;
 		marker.scale.z = 3.25;
 		marker.color.a = 0.9;
 		marker.id = i;
