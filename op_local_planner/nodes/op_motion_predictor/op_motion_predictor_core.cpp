@@ -55,19 +55,19 @@ MotionPrediction::MotionPrediction()
 
 	sub_StepSignal = nh.subscribe("/pred_step_signal", 		1, &MotionPrediction::callbackGetStepForwardSignals, 		this);
 	sub_tracked_objects	= nh.subscribe(m_TrackedObjectsTopicName, 	1,	&MotionPrediction::callbackGetTrackedObjects, 		this);
-	sub_current_pose 	= nh.subscribe("/current_pose", 10,	&MotionPrediction::callbackGetCurrentPose, 		this);
+	sub_current_pose 	= nh.subscribe("/current_pose", 1,	&MotionPrediction::callbackGetCurrentPose, 		this);
 
 	int bVelSource = 1;
 	_nh.getParam("/op_common_params/velocitySource", bVelSource);
 	if(bVelSource == 0)
-		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 10, &MotionPrediction::callbackGetRobotOdom, this);
+		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 1, &MotionPrediction::callbackGetRobotOdom, this);
 	else if(bVelSource == 1)
-		sub_current_velocity = nh.subscribe("/current_velocity", 10, &MotionPrediction::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &MotionPrediction::callbackGetVehicleStatus, this);
 	else if(bVelSource == 2)
-		sub_can_info = nh.subscribe("/can_info", 10, &MotionPrediction::callbackGetCANInfo, this);
+		sub_can_info = nh.subscribe("/can_info", 1, &MotionPrediction::callbackGetCANInfo, this);
 
 	UtilityHNS::UtilityH::GetTickCount(m_VisualizationTimer);
-	PlannerHNS::ROSHelpers::InitPredMarkers(100, m_PredictedTrajectoriesDummy);
+	PlannerHNS::ROSHelpers::InitPredMarkers(500, m_PredictedTrajectoriesDummy);
 	PlannerHNS::ROSHelpers::InitCurbsMarkers(500, m_CurbsDummy);
 	PlannerHNS::ROSHelpers::InitPredParticlesMarkers(1000, m_PredictedParticlesDummy);
 	PlannerHNS::ROSHelpers::InitPredParticlesMarkers(2000, m_GeneratedParticlesDummy, true);
@@ -182,8 +182,8 @@ void MotionPrediction::UpdatePlanningParams(ros::NodeHandle& _nh)
 	}
 
 	_nh.getParam("/op_motion_predictor/enableGenrateBranches" , m_PredictBeh.m_bGenerateBranches);
-	_nh.getParam("/op_motion_predictor/max_distance_to_lane" , m_PredictBeh.m_MaxLaneDetectionDistance);
-	_nh.getParam("/op_motion_predictor/prediction_distance" , m_PredictBeh.m_MaxPredictionDistance);
+	_nh.getParam("/op_motion_predictor/max_distance_to_lane" , m_PredictBeh.m_LaneDetectionDistance);
+	_nh.getParam("/op_motion_predictor/prediction_distance" , m_PredictBeh.m_MinPredictionDistance);
 	_nh.getParam("/op_motion_predictor/enableCurbObstacles"	, m_bEnableCurbObstacles);
 	_nh.getParam("/op_motion_predictor/distanceBetweenCurbs", m_DistanceBetweenCurbs);
 	_nh.getParam("/op_motion_predictor/visualizationTime", m_VisualizationTime);
@@ -432,6 +432,11 @@ void MotionPrediction::VisualizePrediction()
 	pub_ParticlesRviz.publish(m_PredictedParticlesActual);
 
 	//std::cout << "Start Tracking of Trajectories : " <<  m_all_pred_paths.size() << endl;
+	for(auto& path: m_all_pred_paths)
+	{
+		PlannerHNS::PlanningHelpers::FixPathDensity(path, 1.0);
+	}
+
 	PlannerHNS::ROSHelpers::ConvertPredictedTrqajectoryMarkers(m_all_pred_paths, m_PredictedTrajectoriesActual, m_PredictedTrajectoriesDummy);
 	pub_PredictedTrajectoriesRviz.publish(m_PredictedTrajectoriesActual);
 

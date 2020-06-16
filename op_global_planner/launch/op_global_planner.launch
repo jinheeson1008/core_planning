@@ -7,12 +7,12 @@
 	<arg name="enableHMI" 						default="false" /> 
 	<arg name="experimentName" 					default="" />
 	<arg name="enableReplan"    				default="false" />
-	<arg name="goalConfirmDistance" 			default="5.0" />	
+	<arg name="goalConfirmDistance" 			default="10.0" />	
 	<arg name="velocitySource"					default="1" /> <!-- read velocities from (0- Odometry, 1- autoware current_velocities, 2- car_info) "" -->
 	<arg name="mapSource" 						default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml file=2, lanelet2 file=3 -->
-	<arg name="mapFileName" 					default="" /> <!-- incase of kml map source -->
+	<arg name="mapFileName" 					default="/media/hatem/8ac0c5d5-8793-4b98-8728-55f8d67ec0f4/data/Moriyama2/map/kml/moriyama_april_2020_with_bus_stops_boundaries.kml" /> <!-- incase of kml map source -->
 	<arg name="lanelet2_origin"					default="0,0,0" /> <!-- GPS origin for lanelet2 map files, Lat, Long, Alt  --> 	
-	<arg name="destinationFileName" 			default="/media/hatem/8ac0c5d5-8793-4b98-8728-55f8d67ec0f4/data/Moriyama2/hmi/moriyama_destinations.csv" />	
+	<arg name="destinationFileName" 			default="/home/hatem/Con-Projects/ADASTec/data/BusStop/destinations_out.csv" />	
 	
 <node pkg="op_global_planner" type="op_global_planner" name="op_global_planner" output="screen">
 		
