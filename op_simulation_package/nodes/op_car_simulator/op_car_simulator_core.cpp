@@ -858,39 +858,6 @@ void OpenPlannerCarSimulator::MainLoop()
 					std::cout << " ******* Map V2 Is Loaded successfully from the Behavior Selector !! " << std::endl;
 				}
 			}
-
-//			std::vector<UtilityHNS::AisanDataConnFileReader::DataConn> conn_data;;
-//			if(m_MapRaw.GetVersion()==2)
-//			{
-//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessageV2(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data,
-//						m_MapRaw.pLanes, m_MapRaw.pPoints, m_MapRaw.pNodes, m_MapRaw.pLines, m_MapRaw.pWhitelines, PlannerHNS::GPSPoint(), m_Map, true);
-//
-//				if(m_Map.roadSegments.size() > 0)
-//				{
-//					m_bMap = true;
-//					InitializeSimuCar(m_SimParams.startPose);
-//					std::cout << " ******* Map V2 Is Loaded successfully from the Behavior Selector !! " << std::endl;
-//				}
-//			}
-//			else if(m_MapRaw.GetVersion()==1)
-//			{
-//				PlannerHNS::MappingHelpers::ConstructRoadNetworkFromROSMessage(m_MapRaw.pLanes->m_data_list, m_MapRaw.pPoints->m_data_list,
-//						m_MapRaw.pCenterLines->m_data_list, m_MapRaw.pIntersections->m_data_list,m_MapRaw.pAreas->m_data_list,
-//						m_MapRaw.pLines->m_data_list, m_MapRaw.pStopLines->m_data_list,	m_MapRaw.pSignals->m_data_list,
-//						m_MapRaw.pVectors->m_data_list, m_MapRaw.pCurbs->m_data_list, m_MapRaw.pRoadedges->m_data_list, m_MapRaw.pWayAreas->m_data_list,
-//						m_MapRaw.pCrossWalks->m_data_list, m_MapRaw.pNodes->m_data_list, conn_data, nullptr, nullptr, PlannerHNS::GPSPoint(), m_Map, true);
-//
-//				if(m_Map.roadSegments.size() > 0)
-//				{
-//					m_bMap = true;
-//					InitializeSimuCar(m_SimParams.startPose);
-//					std::cout << " ******* Map V1 Is Loaded successfully from the Behavior Selector !! " << std::endl;
-//				}
-//			}
 		}
 
 		if(m_bMap && bInitPos && bGoalPos)
@@ -936,7 +903,12 @@ void OpenPlannerCarSimulator::MainLoop()
 //				if(m_SimParams.bRandomGoal)
 //					m_GlobalPlanner.PlanUsingDPRandom(m_LocalPlanner->state, PLANNING_DISTANCE, m_Map, generatedTotalPaths);
 //				else
-					m_GlobalPlanner.PlanUsingDP(m_LocalPlanner->state, m_SimParams.goalPose, 100000, false, globalPathIds, m_Map, generatedTotalPaths);
+				double planning_distance = pow((currStatus.speed), 2);
+				if(planning_distance < m_PlanningParams.microPlanDistance)
+				{
+					planning_distance = m_PlanningParams.microPlanDistance;
+				}
+				m_GlobalPlanner.PlanUsingDP(m_LocalPlanner->state, m_SimParams.goalPose, 100000, planning_distance, false, globalPathIds, m_Map, generatedTotalPaths);
 
 				for(unsigned int i=0; i < generatedTotalPaths.size(); i++)
 				{

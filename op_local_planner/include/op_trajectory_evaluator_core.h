@@ -28,6 +28,7 @@
 #include <autoware_can_msgs/CANInfo.h>
 #include <autoware_msgs/DetectedObjectArray.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <std_msgs/Int32.h>
 
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/TrajectoryEvaluator.h"
@@ -39,7 +40,7 @@ class TrajectoryEvalCore
 {
 protected:
 
-        PlannerHNS::TrajectoryEvaluator m_TrajectoryCostsCalculator;
+    PlannerHNS::TrajectoryEvaluator m_TrajectoryCostsCalculator;
 	bool m_bUseMoveingObjectsPrediction;
 
 	geometry_msgs::Pose m_OriginPos;
@@ -61,6 +62,7 @@ protected:
 	bool bWayGlobalPathToUse;
 	bool bEnableSmoothGlobalPathForCARLA;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GeneratedRollOuts;
+	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOuts;
 	bool bRollOuts;
 
 	std::vector<PlannerHNS::DetectedObject> m_PredictedObjects;
@@ -70,6 +72,7 @@ protected:
 	struct timespec m_PlanningTimer;
   	std::vector<std::string>    m_LogData;
 
+  	PlannerHNS::EvaluationParams m_EvaluationParams;
   	PlannerHNS::PlanningParams m_PlanningParams;
   	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
 
@@ -100,7 +103,8 @@ protected:
 	ros::Subscriber sub_GlobalPlannerPaths;
 	ros::Subscriber sub_LocalPlannerPaths;
 	ros::Subscriber sub_predicted_objects;
-	ros::Subscriber sub_current_behavior;
+	ros::Subscriber sub_current_trajectory_index;
+	ros::Subscriber sub_current_lane_index;
 
 
 
@@ -112,10 +116,15 @@ protected:
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg);
-	void callbackGetBehaviorState(const geometry_msgs::TwistStampedConstPtr & msg);
+	void callbackGetTrajectoryIndex(const std_msgs::Int32ConstPtr& msg);
+	void callbackGetLaneIndex(const std_msgs::Int32ConstPtr& msg);
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);
+  int GetGlobalPathIndex(const int& iCurrTrajectory);
+  void CollectRollOutsByGlobalPath();
+  void BalanceFactorsToOne(double& priority, double& transition, double& longi, double& lateral, double& change);
+  bool FindBestLane(std::vector<PlannerHNS::TrajectoryCost> tcs, PlannerHNS::TrajectoryCost& best_l);
 
 public:
   TrajectoryEvalCore();

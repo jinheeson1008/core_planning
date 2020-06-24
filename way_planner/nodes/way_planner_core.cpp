@@ -281,8 +281,14 @@ bool way_planner_core::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Plan
 #else
 	std::vector<int> predefinedLanesIds;
 
+	double planning_distance = pow((m_CurrentPose.v), 2);
+	if(planning_distance < MIN_EXTRA_PLAN_DISTANCE)
+	{
+		planning_distance = MIN_EXTRA_PLAN_DISTANCE;
+	}
+
 	double ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint,
-					MAX_GLOBAL_PLAN_DISTANCE, m_params.bEnableLaneChange,
+			MAX_GLOBAL_PLAN_SEARCH_DISTANCE, planning_distance, m_params.bEnableLaneChange,
 					predefinedLanesIds,
 					m_Map, generatedTotalPaths);
 #endif

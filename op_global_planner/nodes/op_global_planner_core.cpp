@@ -29,15 +29,18 @@ GlobalPlanner::GlobalPlanner()
 	m_pCurrGoal = 0;
 	m_iCurrentGoalIndex = 0;
 	m_HMIDestinationID = 0;
-	m_bKmlMap = false;
+	m_bMap = false;
 	m_bFirstStartHMI = false;
 	m_bWaitingState = false;
 	m_bSlowDownState = false;
 	m_bStoppingState = false;
 	m_bReStartState = false;
 	m_bDestinationError = false;
+	m_bReplanSignal = false;
 	m_GlobalPathID = 1;
-	UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
+	UtilityHNS::UtilityH::GetTickCount(m_WaitingTimer);
+	UtilityHNS::UtilityH::GetTickCount(m_ReplanningTimer);
+
 
 	nh.getParam("/op_global_planner/pathDensity" , m_params.pathDensity);
 	nh.getParam("/op_global_planner/enableSmoothing" , m_params.bEnableSmoothing);
@@ -107,21 +110,27 @@ GlobalPlanner::GlobalPlanner()
 		LoadSimulationData();
 	}
 
+	sub_replan_signal = nh.subscribe("/op_global_replan", 1, &GlobalPlanner::callbackGetReplanSignal, this);
 	sub_current_pose = nh.subscribe("/current_pose", 1, &GlobalPlanner::callbackGetCurrentPose, this);
 
 	int bVelSource = 1;
 	nh.getParam("/op_global_planner/velocitySource", bVelSource);
 	if(bVelSource == 0)
+	{
 		sub_robot_odom = nh.subscribe("/odom", 1, &GlobalPlanner::callbackGetRobotOdom, this);
+	}
 	else if(bVelSource == 1)
+	{
 		sub_current_velocity = nh.subscribe("/current_velocity", 1, &GlobalPlanner::callbackGetVehicleStatus, this);
+	}
 	else if(bVelSource == 2)
+	{
 		sub_can_info = nh.subscribe("/can_info", 1, &GlobalPlanner::callbackGetCANInfo, this);
+	}
 
 	//Mapping Section
 	if(m_params.mapSource == PlannerHNS::MAP_AUTOWARE)
 	{
-		sub_bin_map = nh.subscribe("/lanelet_map_bin", 1, &GlobalPlanner::callbackGetLanelet2, this);
 		sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &GlobalPlanner::callbackGetVMLanes,  this);
 		sub_points = nh.subscribe("/vector_map_info/point", 1, &GlobalPlanner::callbackGetVMPoints,  this);
 		sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &GlobalPlanner::callbackGetVMdtLanes,  this);
@@ -136,6 +145,14 @@ GlobalPlanner::GlobalPlanner()
 		sub_way_areas = nh.subscribe("/vector_map_info/way_area", 1, &GlobalPlanner::callbackGetVMWayAreas,  this);
 		sub_cross_walk = nh.subscribe("/vector_map_info/cross_walk", 1, &GlobalPlanner::callbackGetVMCrossWalks,  this);
 		sub_nodes = nh.subscribe("/vector_map_info/node", 1, &GlobalPlanner::callbackGetVMNodes,  this);
+	}
+	else if(m_params.mapSource == PlannerHNS::MAP_LANELET_2)
+	{
+		sub_bin_map = nh.subscribe("/lanelet_map_bin", 1, &GlobalPlanner::callbackGetLanelet2, this);
+	}
+	else if(m_params.mapSource == PlannerHNS::MAP_KML_FILE_NAME)
+	{
+		sub_map_file_name = nh.subscribe("/assure_kml_map_file_name", 1, &GlobalPlanner::kmlMapFileNameCallback, this);
 	}
 
 	tf::StampedTransform transform;
@@ -247,6 +264,11 @@ bool GlobalPlanner::UpdateGoalWithHMI()
 	return false;
 }
 
+void GlobalPlanner::callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg)
+{
+	m_bReplanSignal = msg->data;
+}
+
 void GlobalPlanner::callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr &msg)
 {
 	PlannerHNS::WayPoint wp = PlannerHNS::WayPoint(msg->pose.position.x+m_OriginPos.position.x, msg->pose.position.y+m_OriginPos.position.y, msg->pose.position.z+m_OriginPos.position.z, tf::getYaw(msg->pose.orientation));
@@ -303,7 +325,13 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 	}
 	else
 	{
-		ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint, MAX_GLOBAL_PLAN_DISTANCE, m_params.bEnableLaneChange, predefinedLanesIds, m_Map, generatedTotalPaths);
+		//The distance that is needed to brake from current speed to zero with acceleration of -1 m/s*s
+		double planning_distance = pow((m_CurrentPose.v), 2);
+		if(planning_distance < MIN_EXTRA_PLAN_DISTANCE)
+		{
+			planning_distance = MIN_EXTRA_PLAN_DISTANCE;
+		}
+		ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint, MAX_GLOBAL_PLAN_SEARCH_DISTANCE, planning_distance,  m_params.bEnableLaneChange, predefinedLanesIds, m_Map, generatedTotalPaths);
 	}
 
 	if(ret == 0)
@@ -398,29 +426,6 @@ void GlobalPlanner::FindIncommingBranches(const std::vector<std::vector<PlannerH
 	}
 }
 
-bool GlobalPlanner::CheckForEndOfPath(const std::vector<std::vector<PlannerHNS::WayPoint> >& paths, const PlannerHNS::WayPoint& currPose, const double& end_range_distance)
-{
-	if(paths.size() == 0) return false;
-
-	PlannerHNS::RelativeInfo info;
-	bool ret = PlannerHNS::PlanningHelpers::GetRelativeInfoRange(paths, currPose, 0.75, info);
-	if(ret == true && info.iGlobalPath >= 0 &&  info.iGlobalPath < paths.size() && info.iFront > 0 && info.iFront < paths.at(info.iGlobalPath).size())
-	{
-		double remaining_distance = paths.at(info.iGlobalPath).at(paths.at(info.iGlobalPath).size()-1).cost - (paths.at(info.iGlobalPath).at(info.iFront).cost + info.to_front_distance);
-
-		PlannerHNS::RelativeInfo info_curr;
-		PlannerHNS::PlanningHelpers::GetRelativeInfoLimited(paths.at(info.iGlobalPath), currPose, info_curr, info.iBack);
-
-		//std::cout << "Check End of Path: After: " << info_curr.bAfter << ", Distance: " << remaining_distance << ", param_distance: " << end_range_distance << std::endl;
-		if(info_curr.bAfter == true || remaining_distance < end_range_distance)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
 void GlobalPlanner::SendAvailableOptionsHMI()
 {
 	if(!m_bFirstStartHMI) return;
@@ -508,7 +513,7 @@ void GlobalPlanner::SendAvailableOptionsHMI()
 		msg.available_actions.push_back(PlannerHNS::MSG_CHANGE_DESTINATION);
 	}
 
-	if(CheckForEndOfPath(m_GeneratedTotalPaths, m_CurrentPose, m_params.endOfPathDistance) && m_VehicleState.speed < 0.25)
+	if(PlannerHNS::PlanningHelpers::CheckForEndOfPaths(m_GeneratedTotalPaths, m_CurrentPose, m_params.endOfPathDistance) >= 0 && m_VehicleState.speed < 0.25)
 	{
 		msg.available_actions.push_back(PlannerHNS::MSG_DESTINATION_REACHED);
 	}
@@ -716,7 +721,7 @@ void GlobalPlanner::LoadDestinations(const std::string& fileName)
 
 bool GlobalPlanner::UpdateGoalIndex()
 {
-	if(m_bWaitingState && UtilityHNS::UtilityH::GetTimeDiffNow(m_PlanningTimer) > m_params.waitingTime)
+	if(m_bWaitingState && UtilityHNS::UtilityH::GetTimeDiffNow(m_WaitingTimer) > m_params.waitingTime)
 	{
 		int curr_index = m_iCurrentGoalIndex;
 
@@ -752,60 +757,16 @@ void GlobalPlanner::MainLoop()
 	while (ros::ok())
 	{
 		ros::spinOnce();
+		LoadMap();
 
-		if(m_params.mapSource == PlannerHNS::MAP_KML_FILE && !m_bKmlMap)
+		if(m_bMap && m_GoalsPos.size() > 0)
 		{
-			m_bKmlMap = true;
-			PlannerHNS::KmlMapLoader kml_loader;
-			kml_loader.LoadKML(m_params.mapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-			visualization_msgs::MarkerArray map_marker_array;
-			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
-			pub_MapRviz.publish(map_marker_array);
-		}
-		else if (m_params.mapSource == PlannerHNS::MAP_FOLDER && !m_bKmlMap)
-		{
-			m_bKmlMap = true;
-			PlannerHNS::VectorMapLoader vec_loader(1, m_params.bEnableLaneChange);
-			vec_loader.LoadFromFile(m_params.mapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-			visualization_msgs::MarkerArray map_marker_array;
-			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
-			pub_MapRviz.publish(map_marker_array);
-		}
-		else if (m_params.mapSource == PlannerHNS::MAP_LANELET_2 && !m_bKmlMap)
-		{
-			m_bKmlMap = true;
-			PlannerHNS::Lanelet2MapLoader map_loader;
-			map_loader.LoadMap(m_params.mapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-		}
-		else if (m_params.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bKmlMap)
-		{
-			if(m_MapRaw.AreMessagesReceived())
-			{
-				m_bKmlMap = true;
-				PlannerHNS::VectorMapLoader vec_loader(1, m_params.bEnableLaneChange);
-				vec_loader.LoadFromData(m_MapRaw, m_Map);
-				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-			}
-
-			if(m_bKmlMap)
-			{
-				visualization_msgs::MarkerArray map_marker_array;
-				PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
-				pub_MapRviz.publish(map_marker_array);
-			}
-		}
-
-		if(m_bKmlMap && m_GoalsPos.size() > 0)
-		{
-			bool bMakeNewPlan = false;
+			bool bMakeNewPlan = m_bReplanSignal;
 			bool bDestinationReachSend= false;
 
-			if(!m_bWaitingState && CheckForEndOfPath(m_GeneratedTotalPaths, m_CurrentPose, m_params.endOfPathDistance) && m_VehicleState.speed < 0.25)
+			if(!m_bWaitingState && PlannerHNS::PlanningHelpers::CheckForEndOfPaths(m_GeneratedTotalPaths, m_CurrentPose, m_params.endOfPathDistance) >= 0 && m_VehicleState.speed < 0.25)
 			{
-				UtilityHNS::UtilityH::GetTickCount(m_PlanningTimer);
+				UtilityHNS::UtilityH::GetTickCount(m_WaitingTimer);
 				m_bWaitingState = true;
 			}
 
@@ -845,13 +806,71 @@ void GlobalPlanner::MainLoop()
 }
 
 //Mapping Section
+void GlobalPlanner::LoadMap()
+{
+	if(m_params.mapSource == PlannerHNS::MAP_KML_FILE && !m_bMap)
+	{
+		LoadKmlMap();
+	}
+	else if (m_params.mapSource == PlannerHNS::MAP_FOLDER && !m_bMap)
+	{
+		m_bMap = true;
+		PlannerHNS::VectorMapLoader vec_loader(1, m_params.bEnableLaneChange);
+		vec_loader.LoadFromFile(m_params.mapPath, m_Map);
+		PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+		visualization_msgs::MarkerArray map_marker_array;
+		PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
+		pub_MapRviz.publish(map_marker_array);
+	}
+	else if (m_params.mapSource == PlannerHNS::MAP_LANELET_2 && !m_bMap)
+	{
+		m_bMap = true;
+		PlannerHNS::Lanelet2MapLoader map_loader;
+		map_loader.LoadMap(m_params.mapPath, m_Map);
+		PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+	}
+	else if (m_params.mapSource == PlannerHNS::MAP_AUTOWARE && !m_bMap)
+	{
+		if(m_MapRaw.AreMessagesReceived())
+		{
+			m_bMap = true;
+			PlannerHNS::VectorMapLoader vec_loader(1, m_params.bEnableLaneChange);
+			vec_loader.LoadFromData(m_MapRaw, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+		}
+
+		if(m_bMap)
+		{
+			visualization_msgs::MarkerArray map_marker_array;
+			PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
+			pub_MapRviz.publish(map_marker_array);
+		}
+	}
+}
+
+void GlobalPlanner::LoadKmlMap()
+{
+	PlannerHNS::KmlMapLoader kml_loader;
+	kml_loader.LoadKML(m_params.mapPath, m_Map);
+	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+	visualization_msgs::MarkerArray map_marker_array;
+	PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
+	pub_MapRviz.publish(map_marker_array);
+	m_bMap = true;
+}
+
+void GlobalPlanner::kmlMapFileNameCallback(const std_msgs::String& file_name)
+{
+	m_params.mapPath = file_name.data;
+	LoadKmlMap();
+}
 
 void GlobalPlanner::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
 {
 	PlannerHNS::Lanelet2MapLoader map_loader;
 	map_loader.LoadMap(msg, m_Map);
 	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-	m_bKmlMap = true;
+	m_bMap = true;
 	visualization_msgs::MarkerArray map_marker_array;
 	PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
 	pub_MapRviz.publish(map_marker_array);

@@ -53,7 +53,8 @@
 namespace WayPlannerNS {
 
 
-#define MAX_GLOBAL_PLAN_DISTANCE 10000
+#define MAX_GLOBAL_PLAN_SEARCH_DISTANCE 10000
+#define MIN_EXTRA_PLAN_DISTANCE 100 //meters
 #define _ENABLE_VISUALIZE_PLAN
 #define REPLANNING_DISTANCE 25
 class AutowareRoadNetwork

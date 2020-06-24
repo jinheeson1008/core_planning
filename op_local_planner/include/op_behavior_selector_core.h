@@ -73,6 +73,7 @@ protected: //Planning Related variables
 	bool bWayGlobalPath;
 	bool bWayGlobalPathLogs;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_RollOuts;
+	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOuts;
 	bool bRollOuts;
 
 	PlannerHNS::MAP_SOURCE_TYPE m_MapType;
@@ -119,6 +120,8 @@ protected: //Planning Related variables
 	ros::Publisher pub_TargetSpeedRviz;
 	ros::Publisher pub_ActualSpeedRviz;
 	ros::Publisher pub_DetectedLight;
+	ros::Publisher pub_CurrTrajectoryIndex;
+	ros::Publisher pub_CurrLaneIndex;
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;
@@ -152,6 +155,7 @@ protected: //Planning Related variables
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalTrajectoryCost(const autoware_msgs::LaneConstPtr& msg);
+	void CollectRollOutsByGlobalPath();
 	//----------------------------
 
 	//Traffic Information Section

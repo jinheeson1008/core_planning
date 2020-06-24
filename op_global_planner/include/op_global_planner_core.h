@@ -29,7 +29,8 @@
 #include "vector_map_msgs/SignalArray.h"
 #include "vector_map_msgs/StopLine.h"
 #include "vector_map_msgs/VectorArray.h"
-
+#include <std_msgs/String.h>
+#include <std_msgs/Bool.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -51,12 +52,14 @@
 #include "op_planner/PlannerH.h"
 #include "op_utility/DataRW.h"
 
+
 namespace GlobalPlanningNS
 {
 
-#define MAX_GLOBAL_PLAN_DISTANCE 100000
-#define REPLANNING_DISTANCE 2.5
-#define REPLANNING_TIME 5
+#define MAX_GLOBAL_PLAN_SEARCH_DISTANCE 100000 //meters
+#define MIN_EXTRA_PLAN_DISTANCE 100 //meters
+//#define REPLANNING_DISTANCE 2.5
+//#define REPLANNING_TIME 5
 
 class GlobalPlanningParams
 {
@@ -114,21 +117,21 @@ protected:
 	bool m_bStoppingState;
 	bool m_bReStartState;
 	bool m_bDestinationError;
-	timespec m_PlanningTimer;
+	timespec m_WaitingTimer;
+	timespec m_ReplanningTimer;
+	bool m_bReplanSignal;
+
+	PlannerHNS::WayPoint m_PreviousPlanningPose;
 
 	ros::NodeHandle nh;
 
 	ros::Publisher pub_MapRviz;
 	ros::Publisher pub_Paths;
 	ros::Publisher pub_PathsRviz;
-	ros::Publisher pub_TrafficInfo;
-	//ros::Publisher pub_TrafficInfoRviz;
-	//ros::Publisher pub_StartPointRviz;
-	//ros::Publisher pub_GoalPointRviz;
-	//ros::Publisher pub_NodesListRviz;
 	ros::Publisher pub_GoalsListRviz;
 	ros::Publisher pub_hmi_mission;
 
+	ros::Subscriber sub_replan_signal;
 	ros::Subscriber sub_robot_odom;
 	ros::Subscriber sub_start_pose;
 	ros::Subscriber sub_goal_pose;
@@ -137,6 +140,7 @@ protected:
 	ros::Subscriber sub_can_info;
 	ros::Subscriber sub_road_status_occupancy;
 	ros::Subscriber sub_hmi_mission;
+	ros::Subscriber sub_map_file_name;
 
 public:
 	GlobalPlanner();
@@ -154,6 +158,7 @@ private:
   void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
   void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
   void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
+  void callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg);
   /**
    * @brief Communication between Global Planner and HMI bridge
    * @param msg
@@ -162,7 +167,7 @@ private:
 
   protected:
   	PlannerHNS::RoadNetwork m_Map;
-  	bool	m_bKmlMap;
+  	bool m_bMap;
   	PlannerHNS::PlannerH m_PlannerH;
   	std::vector<std::vector<PlannerHNS::WayPoint> > m_GeneratedTotalPaths;
 
@@ -172,7 +177,7 @@ private:
   	void SaveSimulationData();
   	int LoadSimulationData();
   	void LoadDestinations(const std::string& fileName);
-  	bool CheckForEndOfPath(const std::vector<std::vector<PlannerHNS::WayPoint> >& paths, const PlannerHNS::WayPoint& currPose, const double& end_range_distance);
+  	int CheckForEndOfPaths(const std::vector<std::vector<PlannerHNS::WayPoint> >& paths, const PlannerHNS::WayPoint& currPose, const double& end_range_distance);
   	void FindIncommingBranches(const std::vector<std::vector<PlannerHNS::WayPoint> >& globalPaths, const PlannerHNS::WayPoint& currPose,const double& min_distance,const double& max_distance,
   				std::vector<PlannerHNS::WayPoint*>& branches);
   	PlannerHNS::ACTION_TYPE FromMsgAction(const PlannerHNS::MSG_ACTION& msg_action);
@@ -216,6 +221,9 @@ private:
 	void callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg);
 	void callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg);
 	void callbackGetVMNodes(const vector_map_msgs::NodeArray& msg);
+	void kmlMapFileNameCallback(const std_msgs::String& file_name);
+	void LoadKmlMap();
+	void LoadMap();
 
 };
 

@@ -9,12 +9,14 @@
 	<arg name="enableStepByStepSignal" 	default="false" />
 	<arg name="enableParticleFilterPrediction" 	default="false" />
 	
-	
+	<!-- all weights sum must equal 1 -->
+	<!-- ............................ -->
 	<arg name="pose_weight_factor" 	default="0.2" />
 	<arg name="dir_weight_factor" 	default="0.2" />
 	<arg name="vel_weight_factor" 	default="0.2" />
 	<arg name="acc_weight_factor" 	default="0.2" />
 	<arg name="ind_weight_factor" 	default="0.2" />
+	<!-- ............................ -->
 	
 	<arg name="particles_number" 	default="50" />	
 	<arg name="min_particles_num" 	default="2" />

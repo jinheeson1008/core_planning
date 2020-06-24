@@ -1,8 +1,8 @@
 <!-- -->
 <launch>
 
-	<arg name="mapSource" 					default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml=2, lanelet2 file=3 -->
-	<arg name="mapFileName" 				default="/media/hatem/8ac0c5d5-8793-4b98-8728-55f8d67ec0f4/data/Moriyama2/map/kml/moriyama_april_2020_with_bus_stops_boundaries.kml" />
+	<arg name="mapSource" 					default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml=2, lanelet2 file=3, kml map file path from runtime manager = 4 -->
+	<arg name="mapFileName" 				default="" />
 	<arg name="lanelet2_origin"				default="0,0,0" /> <!-- GPS origin for lanelet2 map files, Lat, Long, Alt  -->
 		
 	<arg name="pathDensity" 				default="0.5" />

@@ -16,6 +16,7 @@
 
 #include "op_trajectory_evaluator_core.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
+#include <numeric>
 
 
 namespace TrajectoryEvaluatorNS
@@ -61,8 +62,10 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryEvalCore::callbackGetGlobalPlannerPath, this);
 	sub_LocalPlannerPaths = nh.subscribe("/local_trajectories", 1, &TrajectoryEvalCore::callbackGetLocalPlannerPath, this);
 	sub_predicted_objects = nh.subscribe("/predicted_objects", 1, &TrajectoryEvalCore::callbackGetPredictedObjects, this);
-	sub_current_behavior = nh.subscribe("/current_behavior", 1, &TrajectoryEvalCore::callbackGetBehaviorState, this);
+	sub_current_lane_index = nh.subscribe("/op_curr_lane_index", 1, &TrajectoryEvalCore::callbackGetLaneIndex, this);
+	sub_current_trajectory_index = nh.subscribe("/op_curr_trajectory_index", 1, &TrajectoryEvalCore::callbackGetTrajectoryIndex, this);
 
+	m_TrajectoryCostsCalculator.SetEvalParams(m_EvaluationParams);
 	PlannerHNS::ROSHelpers::InitCollisionPointsMarkers(50, m_CollisionsDummy);
 }
 
@@ -74,6 +77,14 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 {
 	_nh.getParam("/op_trajectory_evaluator/enablePrediction", m_bUseMoveingObjectsPrediction);
 	_nh.getParam("/op_trajectory_evaluator/keepCurrentTrajectory", m_bKeepCurrentIfPossible);
+
+
+	_nh.getParam("/op_trajectory_evaluator/weight_priority", m_EvaluationParams.priority_weight_);
+	_nh.getParam("/op_trajectory_evaluator/weight_transition", m_EvaluationParams.transition_weight_);
+	_nh.getParam("/op_trajectory_evaluator/weight_longitudinal", m_EvaluationParams.longitudinal_weight_);
+	_nh.getParam("/op_trajectory_evaluator/weight_lateral", m_EvaluationParams.lateral_weight_);
+	_nh.getParam("/op_trajectory_evaluator/weight_lane_change", m_EvaluationParams.lane_change_weight_);
+	_nh.getParam("/op_trajectory_evaluator/collision_time", m_EvaluationParams.collision_time_);
 
 	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
 	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
@@ -105,6 +116,13 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/speedProfileFactor", m_PlanningParams.speedProfileFactor);
 
 	_nh.getParam("/op_common_params/enableLaneChange", m_PlanningParams.enableLaneChange);
+	if(!m_PlanningParams.enableLaneChange)
+	{
+		m_EvaluationParams.lane_change_weight_ = 0;
+		BalanceFactorsToOne(m_EvaluationParams.priority_weight_, m_EvaluationParams.transition_weight_,
+				m_EvaluationParams.longitudinal_weight_, m_EvaluationParams.lateral_weight_, m_EvaluationParams.lane_change_weight_);
+
+	}
 
 	_nh.getParam("/op_common_params/width", m_CarInfo.width);
 	_nh.getParam("/op_common_params/length", m_CarInfo.length);
@@ -115,6 +133,50 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/maxDeceleration", m_CarInfo.max_deceleration);
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
 	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
+}
+
+void TrajectoryEvalCore::BalanceFactorsToOne(double& priority, double& transition, double& longitudinal, double& lateral, double& change)
+	{
+	std::vector<double> factors_list = {priority, transition, longitudinal, lateral, change};
+	int nNonZero = 0;
+	for(unsigned int i=0;i < factors_list.size(); i++)
+	{
+		if(factors_list.at(i) > 0.0)
+			nNonZero++;
+	}
+	double all_factors = std::accumulate(factors_list.begin(), factors_list.end(), 0.0);
+
+	while(all_factors > 1.01 || all_factors < 0.99)
+	{
+		double every_one_share = (1.0 - all_factors)/(double)nNonZero;
+		for(unsigned int i=0;i < factors_list.size(); i++)
+		{
+			if(factors_list.at(i) > 0.0)
+			{
+				factors_list.at(i) += every_one_share;
+			}
+
+			if(factors_list.at(i) < 0.0)
+				factors_list.at(i) = 0.0;
+		}
+
+		nNonZero = 0;
+		for(unsigned int i=0;i < factors_list.size(); i++)
+		{
+			if(factors_list.at(i) > 0.0)
+				nNonZero++;
+		}
+		all_factors = std::accumulate(factors_list.begin(), factors_list.end(), 0.0);
+
+		if(all_factors == 0)
+			break;
+	}
+	priority = factors_list.at(0);
+	transition = factors_list.at(1);
+	longitudinal = factors_list.at(2);
+	lateral = factors_list.at(3);
+	change = factors_list.at(4);
+
 }
 
 void TrajectoryEvalCore::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
@@ -214,29 +276,59 @@ void TrajectoryEvalCore::callbackGetLocalPlannerPath(const autoware_msgs::LaneAr
 	if(msg->lanes.size() > 0)
 	{
 		m_GeneratedRollOuts.clear();
-		int globalPathId_roll_outs = -1;
+		std::vector<int> globalPathsId_roll_outs;
 
 		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
 		{
 			std::vector<PlannerHNS::WayPoint> path;
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), path);
 			m_GeneratedRollOuts.push_back(path);
+			int roll_out_gid = -1;
 			if(path.size() > 0)
-				globalPathId_roll_outs = path.at(0).gid;
-		}
-
-		if(bWayGlobalPath && m_GlobalPaths.size() > 0 && m_GlobalPaths.at(0).size() > 0)
-		{
-			int globalPathId = m_GlobalPaths.at(0).at(0).gid;
-			std::cout << "Before Synchronization At Trajectory Evaluator: GlobalID: " <<  globalPathId << ", LocalID: " << globalPathId_roll_outs << std::endl;
-
-			if(globalPathId_roll_outs == globalPathId)
 			{
-				bWayGlobalPath = false;
-				m_GlobalPathsToUse = m_GlobalPaths;
-				std::cout << "Synchronization At Trajectory Evaluator: GlobalID: " <<  globalPathId << ", LocalID: " << globalPathId_roll_outs << std::endl;
+				roll_out_gid = path.at(i).gid;
+			}
+
+			if(std::find(globalPathsId_roll_outs.begin(), globalPathsId_roll_outs.end(), roll_out_gid) == globalPathsId_roll_outs.end())
+			{
+				globalPathsId_roll_outs.push_back(roll_out_gid);
 			}
 		}
+
+		if(globalPathsId_roll_outs.size() != m_GlobalPaths.size())
+		{
+			std::cout << "Warning From Trajectory Evaluator, paths size mismatch, GlobalPaths: " << m_GlobalPaths.size() << ", LocalPaths: " << globalPathsId_roll_outs.size() << std::endl;
+ 		}
+		else if(bWayGlobalPath)
+		{
+			m_GlobalPathsToUse.clear();
+			for(unsigned int i=0; i < m_GlobalPaths.size(); i++)
+			{
+				if(m_GlobalPaths.at(i).size() > 0)
+				{
+					std::cout << "Before Synchronization At Trajectory Evaluator: GlobalID: " <<  m_GlobalPaths.at(i).at(0).gid << ", LocalID: " << globalPathsId_roll_outs.at(i) << std::endl;
+					if(m_GlobalPaths.at(i).at(0).gid == globalPathsId_roll_outs.at(i))
+					{
+						bWayGlobalPath = false;
+						m_GlobalPathsToUse.push_back(m_GlobalPaths.at(i));
+						std::cout << "Synchronization At Trajectory Evaluator: GlobalID: " <<  m_GlobalPaths.at(i).at(0).gid << ", LocalID: " << globalPathsId_roll_outs.at(i) << std::endl;
+					}
+				}
+			}
+		}
+
+		//if(bWayGlobalPath && m_GlobalPaths.size() > 0 && m_GlobalPaths.at(0).size() > 0)
+//		{
+//			int globalPathId = m_GlobalPaths.at(0).at(0).gid;
+//			std::cout << "Before Synchronization At Trajectory Evaluator: GlobalID: " <<  globalPathId << ", LocalID: " << globalPathId_roll_outs << std::endl;
+//
+//			if(globalPathId_roll_outs == globalPathId)
+//			{
+//				bWayGlobalPath = false;
+//				m_GlobalPathsToUse = m_GlobalPaths;
+//				std::cout << "Synchronization At Trajectory Evaluator: GlobalID: " <<  globalPathId << ", LocalID: " << globalPathId_roll_outs << std::endl;
+//			}
+//		}
 
 		bRollOuts = true;
 	}
@@ -262,9 +354,97 @@ void TrajectoryEvalCore::callbackGetPredictedObjects(const autoware_msgs::Detect
 	}
 }
 
-void TrajectoryEvalCore::callbackGetBehaviorState(const geometry_msgs::TwistStampedConstPtr& msg)
+void TrajectoryEvalCore::callbackGetTrajectoryIndex(const std_msgs::Int32ConstPtr& msg)
 {
-	m_CurrentBehavior.iTrajectory = msg->twist.angular.z;
+	m_CurrentBehavior.iTrajectory = msg->data;
+}
+
+void TrajectoryEvalCore::callbackGetLaneIndex(const std_msgs::Int32ConstPtr& msg)
+{
+	m_CurrentBehavior.iLane = msg->data;
+}
+
+void TrajectoryEvalCore::CollectRollOutsByGlobalPath()
+{
+	m_LanesRollOuts.clear();
+	std::vector< std::vector<PlannerHNS::WayPoint> > local_category;
+	for(auto& g_path: m_GlobalPathsToUse)
+	{
+		if(g_path.size() > 0)
+		{
+			local_category.clear();
+			for(auto& l_traj: m_GeneratedRollOuts)
+			{
+				if(l_traj.size() > 0 && l_traj.at(0).gid == g_path.at(0).gid)
+				{
+					local_category.push_back(l_traj);
+					//std::cout << "Costs Between Global And Generated Local: Global Cost: " << g_path.at(0).laneChangeCost << ", Local Cost: " << l_traj.at(0).laneChangeCost << std::endl;
+				}
+			}
+			m_LanesRollOuts.push_back(local_category);
+		}
+	}
+}
+
+int TrajectoryEvalCore::GetGlobalPathIndex(const int& iCurrTrajectory)
+{
+	int global_path_id = -1;
+	for(unsigned int it = 0; it < m_GeneratedRollOuts.size(); it++)
+	{
+		if(it == m_CurrentBehavior.iTrajectory && m_GeneratedRollOuts.at(it).size() > 0)
+		{
+			global_path_id = m_GeneratedRollOuts.at(it).at(0).gid;
+			break;
+		}
+	}
+
+	int iLane = -1;
+	for(unsigned int ig=0; ig < m_GlobalPathsToUse.size(); ig++)
+	{
+		if(m_GlobalPathsToUse.at(ig).size() > 0 && m_GlobalPathsToUse.at(ig).at(0).gid == global_path_id )
+		{
+			iLane = ig;
+			break;
+		}
+	}
+
+	return iLane;
+}
+
+bool TrajectoryEvalCore::FindBestLane(std::vector<PlannerHNS::TrajectoryCost> tcs, PlannerHNS::TrajectoryCost& best_l)
+{
+	if(tcs.size() == 0) return false;
+
+	if(tcs.size() == 1)
+	{
+		best_l = tcs.at(0);
+		return true;
+	}
+
+	std::sort(tcs.begin(), tcs.end(), PlannerHNS::TrajectoryEvaluator::sortCosts);
+
+	for(unsigned int i=0 ; i < tcs.size(); i++)
+	{
+		if(!tcs.at(i).bBlocked)
+		{
+			best_l = tcs.at(i);
+			break;
+		}
+	}
+
+	if(best_l.bBlocked) // if the best lane is blocked , keep the previous lane as the best lane
+	{
+		if(m_CurrentBehavior.iLane >= 0 && m_CurrentBehavior.iLane < tcs.size())
+		{
+			best_l = tcs.at(m_CurrentBehavior.iLane);
+		}
+		else
+		{
+			best_l = tcs.at(0);
+		}
+	}
+
+	return true;
 }
 
 void TrajectoryEvalCore::MainLoop()
@@ -276,7 +456,7 @@ void TrajectoryEvalCore::MainLoop()
 	while (ros::ok())
 	{
 		ros::spinOnce();
-		PlannerHNS::TrajectoryCost tc;
+
 
 		if(bNewCurrentPos && m_GlobalPaths.size()>0)
 		{
@@ -289,55 +469,134 @@ void TrajectoryEvalCore::MainLoop()
 						m_PlanningParams.pathDensity ,t_centerTrajectorySmoothed, m_prev_index.at(i));
 
 				if(m_prev_index.at(i) > 0 ) m_prev_index.at(i) = m_prev_index.at(i) -1;
+
 				m_GlobalPathSections.push_back(t_centerTrajectorySmoothed);
 			}
 
 			if(m_GlobalPathSections.size()>0)
 			{
-			  tc = m_TrajectoryCostsCalculator.doOneStep(m_GeneratedRollOuts, m_GlobalPathSections.at(0), m_CurrentPos, m_PlanningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
-
-
-				autoware_msgs::Lane l;
-				l.closest_object_distance = tc.closest_obj_distance;
-				l.closest_object_velocity = tc.closest_obj_velocity;
-				l.cost = tc.cost;
-				l.is_blocked = tc.bBlocked;
-				l.lane_index = tc.index;
-				pub_TrajectoryCost.publish(l);
-			}
-
-                        autoware_msgs::LaneArray local_lanes;
-                        for(unsigned int i=0; i < m_TrajectoryCostsCalculator.local_roll_outs_.size(); i++)
-                        {
-                                autoware_msgs::Lane lane;
-                                PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_TrajectoryCostsCalculator.local_roll_outs_.at(i), lane);
-                                lane.closest_object_distance = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).closest_obj_distance;
-                                lane.closest_object_velocity = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).closest_obj_velocity;
-                                lane.cost = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).cost;
-                                lane.is_blocked = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).bBlocked;
-                                lane.lane_index = i;
-                                local_lanes.lanes.push_back(lane);
-                        }
-
-                        pub_LocalWeightedTrajectories.publish(local_lanes);
-
-			if(m_TrajectoryCostsCalculator.trajectory_costs_.size()>0)
-			{
-				visualization_msgs::MarkerArray all_rollOuts;
-				PlannerHNS::ROSHelpers::TrajectoriesToColoredMarkers(m_TrajectoryCostsCalculator.local_roll_outs_, m_TrajectoryCostsCalculator.trajectory_costs_, tc.index, all_rollOuts);
-				pub_LocalWeightedTrajectoriesRviz.publish(all_rollOuts);
-
-				PlannerHNS::ROSHelpers::ConvertCollisionPointsMarkers(m_TrajectoryCostsCalculator.collision_points_, m_CollisionsActual, m_CollisionsDummy);
-				pub_CollisionPointsRviz.publish(m_CollisionsActual);
-
-				//Visualize Safety Box
+				autoware_msgs::LaneArray local_lanes;
+				std::vector<PlannerHNS::TrajectoryCost> tcs;
 				visualization_msgs::Marker safety_box;
-				PlannerHNS::ROSHelpers::ConvertFromPlannerHRectangleToAutowareRviz(m_TrajectoryCostsCalculator.safety_border_.points, safety_box);
+				std::vector<PlannerHNS::WayPoint> collision_points;
+				visualization_msgs::MarkerArray all_rollOuts;
+//				std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > collected_local_roll_outs;
+//				std::vector<std::vector<PlannerHNS::TrajectoryCost> > collected_trajectory_costs;
+
+				CollectRollOutsByGlobalPath();
+				if(!m_PlanningParams.enableLaneChange)
+				{
+					PlannerHNS::TrajectoryCost tc = m_TrajectoryCostsCalculator.doOneStep(m_LanesRollOuts.at(0), m_GlobalPathSections.at(0), m_CurrentPos,
+							m_PlanningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
+					tcs.push_back(tc);
+
+					for(unsigned int i=0; i < m_TrajectoryCostsCalculator.local_roll_outs_.size(); i++)
+					{
+							autoware_msgs::Lane lane;
+							PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_TrajectoryCostsCalculator.local_roll_outs_.at(i), lane);
+							lane.closest_object_distance = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).closest_obj_distance;
+							lane.closest_object_velocity = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).closest_obj_velocity;
+							lane.cost = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).cost;
+							lane.is_blocked = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).bBlocked;
+							lane.lane_index = local_lanes.lanes.size();
+							lane.lane_id = 0;
+							local_lanes.lanes.push_back(lane);
+					}
+
+//					collected_local_roll_outs.push_back(m_TrajectoryCostsCalculator.local_roll_outs_);
+//					collected_trajectory_costs.push_back(m_TrajectoryCostsCalculator.trajectory_costs_);
+					PlannerHNS::ROSHelpers::TrajectoriesToColoredMarkers(m_TrajectoryCostsCalculator.local_roll_outs_, m_TrajectoryCostsCalculator.trajectory_costs_, tc.index, all_rollOuts);
+					collision_points.insert(collision_points.end(), m_TrajectoryCostsCalculator.collision_points_.begin(), m_TrajectoryCostsCalculator.collision_points_.end());
+					PlannerHNS::ROSHelpers::ConvertFromPlannerHRectangleToAutowareRviz(m_TrajectoryCostsCalculator.safety_border_.points, safety_box);
+
+				}
+				else
+				{
+					//int iCurrLane = GetGlobalPathIndex(m_CurrentBehavior.iTrajectory);
+					for(unsigned int ig = 0; ig < m_GlobalPathSections.size(); ig++)
+					{
+//						int iCurrTraj = -1;
+//						if(iCurrLane == ig)
+//						{
+//							iCurrTraj = m_CurrentBehavior.iTrajectory;
+//						}
+
+//						std::cout << "Best Lane From Behavior Selector: " << m_CurrentBehavior.iLane << ", Trajectory: " << m_CurrentBehavior.iTrajectory << ", Curr Lane: " << ig << std::endl;
+
+						PlannerHNS::TrajectoryCost temp_tc = m_TrajectoryCostsCalculator.doOneStep(m_LanesRollOuts.at(ig), m_GlobalPathSections.at(ig), m_CurrentPos,
+								m_PlanningParams, m_CarInfo, m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
+
+						temp_tc.lane_index = ig;
+						tcs.push_back(temp_tc);
+
+						for(unsigned int i=0; i < m_TrajectoryCostsCalculator.local_roll_outs_.size(); i++)
+						{
+								autoware_msgs::Lane lane;
+								PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_TrajectoryCostsCalculator.local_roll_outs_.at(i), lane);
+								lane.closest_object_distance = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).closest_obj_distance;
+								lane.closest_object_velocity = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).closest_obj_velocity;
+								lane.cost = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).cost;
+								lane.is_blocked = m_TrajectoryCostsCalculator.trajectory_costs_.at(i).bBlocked;
+								lane.lane_index = local_lanes.lanes.size();
+								lane.lane_id = ig;
+								local_lanes.lanes.push_back(lane);
+						}
+
+//						collected_local_roll_outs.push_back(m_TrajectoryCostsCalculator.local_roll_outs_);
+//						collected_trajectory_costs.push_back(m_TrajectoryCostsCalculator.trajectory_costs_);
+
+						PlannerHNS::ROSHelpers::TrajectoriesToColoredMarkers(m_TrajectoryCostsCalculator.local_roll_outs_, m_TrajectoryCostsCalculator.trajectory_costs_, temp_tc.index, all_rollOuts);
+						collision_points.insert(collision_points.end(), m_TrajectoryCostsCalculator.collision_points_.begin(), m_TrajectoryCostsCalculator.collision_points_.end());
+						PlannerHNS::ROSHelpers::ConvertFromPlannerHRectangleToAutowareRviz(m_TrajectoryCostsCalculator.safety_border_.points, safety_box);
+					}
+				}
+
+				PlannerHNS::ROSHelpers::ConvertCollisionPointsMarkers(collision_points, m_CollisionsActual, m_CollisionsDummy);
+
+
+				PlannerHNS::TrajectoryCost best_lane_costs;
+				if(FindBestLane(tcs, best_lane_costs))
+				{
+					autoware_msgs::Lane l;
+					l.closest_object_distance = best_lane_costs.closest_obj_distance;
+					l.closest_object_velocity = best_lane_costs.closest_obj_velocity;
+					l.cost = best_lane_costs.cost;
+					l.is_blocked = best_lane_costs.bBlocked;
+					l.lane_index = best_lane_costs.index;
+					l.lane_id = best_lane_costs.lane_index;
+					pub_TrajectoryCost.publish(l);
+				}
+				else
+				{
+					std::cout << "Warning from Trajectory Evaluator, Can't find suitable lane for driving !! " << std::endl;
+				}
+
+//				std::cout << "Costs For Lanes:  ---------------------- " << std::endl;
+//				std::cout << "Best Lane From Behavior Selector: " << m_CurrentBehavior.iLane << ", Trajectory: " << m_CurrentBehavior.iTrajectory << std::endl;
+//
+//				if(m_CurrentBehavior.iLane >= 0 && m_CurrentBehavior.iLane < m_GlobalPathSections.size())
+//				{
+//					std::cout << "Lane Change Cost: for Current Lane: " << m_LanesRollOuts.at(m_CurrentBehavior.iLane).at(m_CurrentBehavior.iTrajectory).at(0).laneChangeCost << std::endl;
+//				}
+//				for(unsigned int i=0; i < tcs.size(); i++)
+//				{
+//					std::cout << "i: " << i << ", Index: " << tcs.at(i).index << ", GlobalIndex: " << tcs.at(i).lane_index << ", Cost: " << tcs.at(i).cost << ", Blocked: " << tcs.at(i).bBlocked << std::endl;
+//				}
+//				std::cout << "Best Lane From Cost Calculator : " <<std::endl;
+//				std::cout << "i: " << -1 << ", Index: " << best_lane_costs.index << ", GlobalIndex: " << best_lane_costs.lane_index << ", Cost: " << best_lane_costs.cost << ", Blocked: " << best_lane_costs.bBlocked << std::endl;
+//				std::cout << "---------------------- " << std::endl;
+
+				pub_LocalWeightedTrajectories.publish(local_lanes);
+				pub_CollisionPointsRviz.publish(m_CollisionsActual);
 				pub_SafetyBorderRviz.publish(safety_box);
+//				PlannerHNS::ROSHelpers::TrajectoriesToColoredMarkers(collected_local_roll_outs.at(best_lane_costs.lane_index), collected_trajectory_costs.at(best_lane_costs.lane_index), best_lane_costs.index, all_rollOuts);
+				pub_LocalWeightedTrajectoriesRviz.publish(all_rollOuts);
 			}
 		}
 		else
+		{
 			sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 	1,		&TrajectoryEvalCore::callbackGetGlobalPlannerPath, 	this);
+		}
 
 		loop_rate.sleep();
 	}
