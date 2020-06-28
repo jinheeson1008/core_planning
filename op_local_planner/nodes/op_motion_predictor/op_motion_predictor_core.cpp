@@ -183,7 +183,8 @@ void MotionPrediction::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	_nh.getParam("/op_motion_predictor/enableGenrateBranches" , m_PredictBeh.m_bGenerateBranches);
 	_nh.getParam("/op_motion_predictor/max_distance_to_lane" , m_PredictBeh.m_LaneDetectionDistance);
-	_nh.getParam("/op_motion_predictor/prediction_distance" , m_PredictBeh.m_MinPredictionDistance);
+	_nh.getParam("/op_motion_predictor/min_prediction_distance" , m_PredictBeh.m_MinPredictionDistance);
+	_nh.getParam("/op_motion_predictor/min_prediction_time" , m_PredictBeh.m_MinPredictionTime);
 	_nh.getParam("/op_motion_predictor/enableCurbObstacles"	, m_bEnableCurbObstacles);
 	_nh.getParam("/op_motion_predictor/distanceBetweenCurbs", m_DistanceBetweenCurbs);
 	_nh.getParam("/op_motion_predictor/visualizationTime", m_VisualizationTime);

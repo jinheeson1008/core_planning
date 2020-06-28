@@ -1,7 +1,8 @@
 <launch>	
 	
 	<arg name="max_distance_to_lane" 	default="1.0"/>
-	<arg name="prediction_distance" 	default="25.0"/>
+	<arg name="min_prediction_distance" default="1.5"/> <!-- in meters -->
+	<arg name="min_prediction_time" 	default="1.5"/> <!-- in seconds -->
 	<arg name="enableGenrateBranches" 	default="false"/>
 	<arg name="enableCurbObstacles" 	default="false" />
 	<arg name="distanceBetweenCurbs" 	default="2.0" />
@@ -26,7 +27,8 @@
 	<node pkg="op_local_planner" type="op_motion_predictor" name="op_motion_predictor" output="screen">		
 			
 		<param name="max_distance_to_lane" 		value="$(arg max_distance_to_lane)"/>
-		<param name="prediction_distance" 		value="$(arg prediction_distance)"/>
+		<param name="min_prediction_distance" 	value="$(arg min_prediction_distance)"/>
+		<param name="min_prediction_time" 		value="$(arg min_prediction_time)"/>
 		<param name="enableGenrateBranches" 	value="$(arg enableGenrateBranches)"/>
 		<param name="enableCurbObstacles" 		value="$(arg enableCurbObstacles)" />
 		<param name="distanceBetweenCurbs" 		value="$(arg distanceBetweenCurbs)" />

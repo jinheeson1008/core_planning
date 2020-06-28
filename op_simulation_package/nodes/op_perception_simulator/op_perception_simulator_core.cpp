@@ -76,7 +76,6 @@ OpenPlannerSimulatorPerception::~OpenPlannerSimulatorPerception()
 {
 }
 
-
 void OpenPlannerSimulatorPerception::callbackGetRvizPoint(const geometry_msgs::PoseStampedConstPtr& msg)
 {
 	tf::StampedTransform transform;
@@ -151,7 +150,6 @@ void OpenPlannerSimulatorPerception::callbackGetSimuData(const geometry_msgs::Po
 	}
 }
 
-
 autoware_msgs::CloudCluster OpenPlannerSimulatorPerception::GenerateSimulatedObstacleCluster(const double& width, const double& length, const double& height, const int& nPoints, const geometry_msgs::Pose& centerPose)
 {
 	autoware_msgs::CloudCluster cluster;
@@ -204,6 +202,7 @@ autoware_msgs::CloudCluster OpenPlannerSimulatorPerception::GenerateSimulatedObs
 
 		center_p.pos = rotationMat*center_p.pos;
 		center_p.pos = translationMat*center_p.pos;
+		center_p.pos.z = cluster.avg_point.point.z + height/2.0;
 
 		pcl::PointXYZI p;
 		p.x = center_p.pos.x;
