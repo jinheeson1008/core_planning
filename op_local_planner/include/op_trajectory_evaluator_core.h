@@ -121,7 +121,7 @@ protected:
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);
-  int GetGlobalPathIndex(const int& iCurrTrajectory);
+  //int GetGlobalPathIndex(const int& iCurrTrajectory);
   void CollectRollOutsByGlobalPath();
   void BalanceFactorsToOne(double& priority, double& transition, double& longi, double& lateral, double& change);
   bool FindBestLane(std::vector<PlannerHNS::TrajectoryCost> tcs, PlannerHNS::TrajectoryCost& best_l);

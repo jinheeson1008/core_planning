@@ -761,7 +761,7 @@ void GlobalPlanner::MainLoop()
 
 		if(m_bMap && m_GoalsPos.size() > 0)
 		{
-			bool bMakeNewPlan = m_bReplanSignal;
+			bool bMakeNewPlan = false;
 			bool bDestinationReachSend= false;
 
 			if(!m_bWaitingState && PlannerHNS::PlanningHelpers::CheckForEndOfPaths(m_GeneratedTotalPaths, m_CurrentPose, m_params.endOfPathDistance) >= 0 && m_VehicleState.speed < 0.25)
@@ -781,7 +781,7 @@ void GlobalPlanner::MainLoop()
 				//std::cout << "Goal Index Updated: " << m_iCurrentGoalIndex << ", New Plan: " << bMakeNewPlan << std::endl;
 			}
 
-			if(m_iCurrentGoalIndex >= 0 && (bMakeNewPlan || m_GeneratedTotalPaths.size() == 0))
+			if(m_iCurrentGoalIndex >= 0 && (m_bReplanSignal || bMakeNewPlan || m_GeneratedTotalPaths.size() == 0))
 			{
 				std::cout << "Current Goal Index = " << m_iCurrentGoalIndex << std::endl << std::endl;
 				PlannerHNS::WayPoint goalPoint = m_GoalsPos.at(m_iCurrentGoalIndex);
@@ -793,6 +793,7 @@ void GlobalPlanner::MainLoop()
 					m_bReStartState = false;
 					m_bStoppingState = false;
 					m_bSlowDownState = false;
+					m_bReplanSignal = false;
 					bMakeNewPlan = false;
 					VisualizeAndSend(m_GeneratedTotalPaths);
 				}

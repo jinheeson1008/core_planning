@@ -13,7 +13,7 @@
 	<arg name="weight_lane_change" 	default="0.2"/>
 	<!-- ............................ -->
 	
-	<arg name="collision_time" 	default="3"/> <!-- in seconds -->
+	<arg name="collision_time" 	default="6"/> <!-- in seconds -->
 			
 	<node pkg="op_local_planner" type="op_trajectory_evaluator" name="op_trajectory_evaluator" output="screen">
 	

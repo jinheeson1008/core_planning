@@ -39,6 +39,7 @@
 #include <autoware_msgs/LaneArray.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
+#include <std_msgs/Bool.h>
 #include <geometry_msgs/TwistWithCovarianceStamped.h>
 #include <autoware_can_msgs/CANInfo.h>
 #include <autoware_msgs/DetectedObjectArray.h>
@@ -51,7 +52,7 @@
 #include "op_planner/DecisionMaker.h"
 #include "op_utility/DataRW.h"
 
-#define LOG_LOCAL_PLANNING_DATA
+#define LOG_LOCAL_PLANNING_DATA_
 
 namespace BehaviorGeneratorNS
 {
@@ -87,6 +88,7 @@ protected: //Planning Related variables
 
 	PlannerHNS::DecisionMaker m_BehaviorGenerator;
 	PlannerHNS::BehaviorState m_CurrentBehavior;
+	bool m_bRequestNewPlanSent;
 
   	std::vector<std::string> m_LogData;
 
@@ -122,6 +124,8 @@ protected: //Planning Related variables
 	ros::Publisher pub_DetectedLight;
 	ros::Publisher pub_CurrTrajectoryIndex;
 	ros::Publisher pub_CurrLaneIndex;
+	ros::Publisher pub_RequestReplan;
+	ros::Publisher pub_BehaviorStateRviz;
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;
@@ -133,7 +137,6 @@ protected: //Planning Related variables
 	ros::Subscriber sub_Trajectory_Cost;
 	ros::Subscriber sub_TrafficLightStatus;
 	ros::Subscriber sub_TrafficLightSignals;
-	ros::Publisher pub_BehaviorStateRviz;
 
 	ros::Subscriber sub_twist_cmd;
 	ros::Subscriber sub_twist_raw;
