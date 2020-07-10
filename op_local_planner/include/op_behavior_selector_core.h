@@ -46,13 +46,15 @@
 #include <autoware_msgs/TrafficLight.h>
 #include <autoware_msgs/Signals.h>
 #include <autoware_msgs/ControlCommand.h>
+#include <autoware_msgs/Waypoint.h>
+#include <autoware_msgs/VehicleStatus.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <autoware_lanelet2_msgs/MapBin.h>
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/DecisionMaker.h"
 #include "op_utility/DataRW.h"
 
-#define LOG_LOCAL_PLANNING_DATA_
+#define LOG_LOCAL_PLANNING_DATA
 
 namespace BehaviorGeneratorNS
 {
@@ -132,6 +134,7 @@ protected: //Planning Related variables
 	ros::Subscriber sub_current_velocity;
 	ros::Subscriber sub_robot_odom;
 	ros::Subscriber sub_can_info;
+	ros::Subscriber sub_vehicle_status;
 	ros::Subscriber sub_GlobalPlannerPaths;
 	ros::Subscriber sub_LocalPlannerPaths;
 	ros::Subscriber sub_Trajectory_Cost;
@@ -148,9 +151,10 @@ protected: //Planning Related variables
 	void callbackGetTwistCMD(const geometry_msgs::TwistStampedConstPtr& msg);
 	void callbackGetCommandCMD(const autoware_msgs::ControlCommandConstPtr& msg);
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-	void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
 	void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
 	void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
+	void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
 	//----------------------------
 
 	//Path Planning Section

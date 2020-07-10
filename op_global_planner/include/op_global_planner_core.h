@@ -37,6 +37,7 @@
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <autoware_msgs/State.h>
+#include <autoware_msgs/VehicleStatus.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <tf/tf.h>
@@ -133,6 +134,7 @@ protected:
 
 	ros::Subscriber sub_replan_signal;
 	ros::Subscriber sub_robot_odom;
+	ros::Subscriber sub_vehicle_status;
 	ros::Subscriber sub_start_pose;
 	ros::Subscriber sub_goal_pose;
 	ros::Subscriber sub_current_pose;
@@ -155,9 +157,10 @@ private:
   void callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr &msg);
   void callbackGetStartPose(const geometry_msgs::PoseWithCovarianceStampedConstPtr &input);
   void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-  void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
+  void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
   void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
   void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
+  void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
   void callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg);
   /**
    * @brief Communication between Global Planner and HMI bridge

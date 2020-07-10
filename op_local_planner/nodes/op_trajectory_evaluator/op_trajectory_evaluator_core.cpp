@@ -52,12 +52,24 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 
 	int bVelSource = 1;
 	_nh.getParam("/op_common_params/velocitySource", bVelSource);
+	std::string velocity_topic;
 	if(bVelSource == 0)
+	{
 		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 1, &TrajectoryEvalCore::callbackGetRobotOdom, this);
+	}
 	else if(bVelSource == 1)
+	{
 		sub_current_velocity = nh.subscribe("/current_velocity", 1, &TrajectoryEvalCore::callbackGetVehicleStatus, this);
+	}
 	else if(bVelSource == 2)
+	{
 		sub_can_info = nh.subscribe("/can_info", 1, &TrajectoryEvalCore::callbackGetCANInfo, this);
+	}
+	else if(bVelSource == 3)
+	{
+		_nh.getParam("/op_common_params/vehicle_status_topic", velocity_topic);
+		sub_vehicle_status = _nh.subscribe(velocity_topic, 1, &TrajectoryEvalCore::callbackGetVehicleStatus, this);
+	}
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryEvalCore::callbackGetGlobalPlannerPath, this);
 	sub_LocalPlannerPaths = nh.subscribe("/local_trajectories", 1, &TrajectoryEvalCore::callbackGetLocalPlannerPath, this);
@@ -128,7 +140,7 @@ void TrajectoryEvalCore::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/length", m_CarInfo.length);
 	_nh.getParam("/op_common_params/wheelBaseLength", m_CarInfo.wheel_base);
 	_nh.getParam("/op_common_params/turningRadius", m_CarInfo.turning_radius);
-	_nh.getParam("/op_common_params/maxSteerAngle", m_CarInfo.max_steer_angle);
+	_nh.getParam("/op_common_params/maxWheelAngle", m_CarInfo.max_wheel_angle);
 	_nh.getParam("/op_common_params/maxAcceleration", m_CarInfo.max_acceleration);
 	_nh.getParam("/op_common_params/maxDeceleration", m_CarInfo.max_deceleration);
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
@@ -185,7 +197,7 @@ void TrajectoryEvalCore::callbackGetCurrentPose(const geometry_msgs::PoseStamped
 	bNewCurrentPos = true;
 }
 
-void TrajectoryEvalCore::callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg)
+void TrajectoryEvalCore::callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg)
 {
 	m_VehicleStatus.speed = msg->twist.linear.x;
 	m_CurrentPos.v = m_VehicleStatus.speed;
@@ -199,7 +211,7 @@ void TrajectoryEvalCore::callbackGetCANInfo(const autoware_can_msgs::CANInfoCons
 {
 	m_VehicleStatus.speed = msg->speed/3.6;
 	m_CurrentPos.v = m_VehicleStatus.speed;
-	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_steer_angle / m_CarInfo.max_steer_value;
+	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_wheel_angle / m_CarInfo.max_steer_value;
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }
@@ -212,6 +224,15 @@ void TrajectoryEvalCore::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& 
 		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
+}
+
+void TrajectoryEvalCore::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
+{
+	m_VehicleStatus.speed = msg->speed/3.6;
+	m_VehicleStatus.steer = msg->angle*DEG2RAD;
+	m_CurrentPos.v = m_VehicleStatus.speed;
+	bVehicleStatus = true;
+//	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
 }
 
 void TrajectoryEvalCore::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)

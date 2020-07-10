@@ -27,6 +27,7 @@
 #include <autoware_msgs/LaneArray.h>
 #include <autoware_can_msgs/CANInfo.h>
 #include <autoware_msgs/DetectedObjectArray.h>
+#include <autoware_msgs/VehicleStatus.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/Int32.h>
 
@@ -100,6 +101,7 @@ protected:
 	ros::Subscriber sub_current_velocity;
 	ros::Subscriber sub_robot_odom;
 	ros::Subscriber sub_can_info;
+	ros::Subscriber sub_vehicle_status;
 	ros::Subscriber sub_GlobalPlannerPaths;
 	ros::Subscriber sub_LocalPlannerPaths;
 	ros::Subscriber sub_predicted_objects;
@@ -110,9 +112,10 @@ protected:
 
 	// Callback function for subscriber.
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-	void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
 	void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
 	void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
+	void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg);

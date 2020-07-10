@@ -41,7 +41,7 @@ OpenPlannerDataLogger::OpenPlannerDataLogger()
 
 	UtilityHNS::UtilityH::GetTickCount(m_Timer);
 
-	sub_behavior_state 		= nh.subscribe("/current_behavior",	10,  &OpenPlannerDataLogger::callbackGetBehaviorState, 	this);
+	sub_behavior_state 	= nh.subscribe("/op_current_behavior",	10,  &OpenPlannerDataLogger::callbackGetBehaviorState, 	this);
 	sub_current_pose = nh.subscribe("/current_pose", 1,	&OpenPlannerDataLogger::callbackGetCurrentPose, this);
 	sub_twist_raw = nh.subscribe("/twist_raw", 1, &OpenPlannerDataLogger::callbackGetTwistRaw, this);
 	sub_twist_cmd = nh.subscribe("/twist_cmd", 1, &OpenPlannerDataLogger::callbackGetTwistCMD, this);
@@ -180,7 +180,7 @@ void OpenPlannerDataLogger::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/length", m_CarInfo.length);
 	_nh.getParam("/op_common_params/wheelBaseLength", m_CarInfo.wheel_base);
 	_nh.getParam("/op_common_params/turningRadius", m_CarInfo.turning_radius);
-	_nh.getParam("/op_common_params/maxSteerAngle", m_CarInfo.max_steer_angle);
+	_nh.getParam("/op_common_params/maxWheelAngle", m_CarInfo.max_wheel_angle);
 	_nh.getParam("/op_common_params/maxAcceleration", m_CarInfo.max_acceleration);
 	_nh.getParam("/op_common_params/maxDeceleration", m_CarInfo.max_deceleration);
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
@@ -344,9 +344,9 @@ void OpenPlannerDataLogger::callbackGetPredictedObjects(const autoware_msgs::Det
 
 //Functions related to Ego Vehicle Data
 //----------------------------
-void OpenPlannerDataLogger::callbackGetBehaviorState(const geometry_msgs::TwistStampedConstPtr& msg )
+void OpenPlannerDataLogger::callbackGetBehaviorState(const autoware_msgs::WaypointConstPtr& msg)
 {
-	m_CurrentBehavior = ConvertBehaviorStateFromAutowareToPlannerH(msg);
+	m_CurrentBehavior = PlannerHNS::ROSHelpers::ConvertAutowareWaypointToBehaviorState(*msg);
 //	std::cout << "Receive Behavior Data From Ego Vehicle... " << msg->header.stamp <<  std::endl;
 }
 
@@ -389,7 +389,7 @@ void OpenPlannerDataLogger::callbackGetCANInfo(const autoware_can_msgs::CANInfoC
 
 	m_VehicleStatus.speed = msg->speed/3.6;
 	m_CurrentPos.v = m_VehicleStatus.speed;
-	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_steer_angle / m_CarInfo.max_steer_value;
+	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_wheel_angle / m_CarInfo.max_steer_value;
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 }
 
@@ -718,28 +718,28 @@ void OpenPlannerDataLogger::LogLocalTrafficInfo(double dt)
 
 //Helper Functions
 //----------------------------
-PlannerHNS::BehaviorState OpenPlannerDataLogger::ConvertBehaviorStateFromAutowareToPlannerH(const geometry_msgs::TwistStampedConstPtr& msg)
-{
-	PlannerHNS::BehaviorState behavior;
-	behavior.bNewPlan = msg->twist.linear.x;
-	behavior.followDistance = msg->twist.linear.y;
-	behavior.followVelocity = msg->twist.linear.z;
-
-	if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_LEFT)
-		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_LEFT;
-	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_RIGHT)
-		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_RIGHT;
-	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_BOTH)
-		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_BOTH;
-	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_NONE)
-		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_NONE;
-
-	behavior.state = GetStateFromNumber(msg->twist.angular.y);
-	behavior.iTrajectory = msg->twist.angular.z;
-
-	return behavior;
-
-}
+//PlannerHNS::BehaviorState OpenPlannerDataLogger::ConvertBehaviorStateFromAutowareToPlannerH(const geometry_msgs::TwistStampedConstPtr& msg)
+//{
+//	PlannerHNS::BehaviorState behavior;
+//	behavior.bNewPlan = msg->twist.linear.x;
+//	behavior.followDistance = msg->twist.linear.y;
+//	behavior.followVelocity = msg->twist.linear.z;
+//
+//	if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_LEFT)
+//		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_LEFT;
+//	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_RIGHT)
+//		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_RIGHT;
+//	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_BOTH)
+//		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_BOTH;
+//	else if(msg->twist.angular.x == PlannerHNS::LIGHT_INDICATOR::INDICATOR_NONE)
+//		behavior.indicator = PlannerHNS::LIGHT_INDICATOR::INDICATOR_NONE;
+//
+//	behavior.state = GetStateFromNumber(msg->twist.angular.y);
+//	behavior.iTrajectory = msg->twist.angular.z;
+//
+//	return behavior;
+//
+//}
 
 PlannerHNS::STATE_TYPE OpenPlannerDataLogger::GetStateFromNumber(const int& iBehState)
 {

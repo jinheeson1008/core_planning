@@ -51,7 +51,8 @@ BehaviorGen::BehaviorGen()
 	pub_LocalPath = nh.advertise<autoware_msgs::Lane>("final_waypoints", 1,true);
 	pub_LocalBasePath = nh.advertise<autoware_msgs::Lane>("base_waypoints", 1,true);
 	pub_ClosestIndex = nh.advertise<std_msgs::Int32>("closest_waypoint", 1,true);
-	pub_BehaviorState = nh.advertise<geometry_msgs::TwistStamped>("current_behavior", 1);
+	//pub_BehaviorState = nh.advertise<geometry_msgs::TwistStamped>("current_behavior", 1);
+	pub_BehaviorState = nh.advertise<autoware_msgs::Waypoint>("op_current_behavior", 1);
 	pub_SimuBoxPose	  = nh.advertise<geometry_msgs::PoseArray>("sim_box_pose_ego", 1);
 	pub_BehaviorStateRviz = nh.advertise<visualization_msgs::MarkerArray>("behavior_state", 1);
 	pub_SelectedPathRviz = nh.advertise<visualization_msgs::MarkerArray>("local_selected_trajectory_rviz", 1);
@@ -83,12 +84,24 @@ BehaviorGen::BehaviorGen()
 	//sub_ctrl_cmd = nh.subscribe("/ctrl_cmd", 1, &BehaviorGen::callbackGetCommandCMD, this);
 	int bVelSource = 1;
 	_nh.getParam("/op_common_params/velocitySource", bVelSource);
+	std::string velocity_topic;
 	if(bVelSource == 0)
+	{
 		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 1, &BehaviorGen::callbackGetRobotOdom, this);
+	}
 	else if(bVelSource == 1)
+	{
 		sub_current_velocity = nh.subscribe("/current_velocity", 1, &BehaviorGen::callbackGetVehicleStatus, this);
+	}
 	else if(bVelSource == 2)
+	{
 		sub_can_info = nh.subscribe("/can_info", 1, &BehaviorGen::callbackGetCANInfo, this);
+	}
+	else if(bVelSource == 3)
+	{
+		_nh.getParam("/op_common_params/vehicle_status_topic", velocity_topic);
+		sub_vehicle_status = _nh.subscribe(velocity_topic, 1, &BehaviorGen::callbackGetVehicleStatus, this);
+	}
 	//----------------------------
 
 
@@ -124,7 +137,7 @@ BehaviorGen::~BehaviorGen()
 
 	UtilityHNS::DataRW::WriteLogData(fileName.str(), "MainLog",
 				"time,dt, Behavior_i, Behavior_str, RollOuts_n, Blocked_i, Central_i, Selected_i, StopSign_id, Light_id, Stop_Dist, Follow_Dist, Follow_Vel,"
-				"Target_Vel, PID_Vel, T_cmd_Vel, C_cmd_Vel, Vel, Steer, X, Y, Z, Theta,"
+				"Target_Vel, PID_Vel, T_cmd_Vel, C_cmd_Vel, Vel, Steer, X, Y, Z, Theta, Goal_Dist,d_goal_min_stop_d,"
 				, m_LogData);
 #endif
 }
@@ -139,9 +152,6 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	_nh.getParam("/op_common_params/enableTrafficLightBehavior", m_PlanningParams.enableTrafficLightBehavior);
 	_nh.getParam("/op_common_params/enableStopSignBehavior", m_PlanningParams.enableStopSignBehavior);
-
-	_nh.getParam("/op_common_params/maxVelocity", m_PlanningParams.maxSpeed);
-	_nh.getParam("/op_common_params/minVelocity", m_PlanningParams.minSpeed);
 	_nh.getParam("/op_common_params/maxLocalPlanDistance", m_PlanningParams.microPlanDistance);
 
 	_nh.getParam("/op_common_params/pathDensity", m_PlanningParams.pathDensity);
@@ -167,9 +177,11 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/length", m_CarInfo.length);
 	_nh.getParam("/op_common_params/wheelBaseLength", m_CarInfo.wheel_base);
 	_nh.getParam("/op_common_params/turningRadius", m_CarInfo.turning_radius);
-	_nh.getParam("/op_common_params/maxSteerAngle", m_CarInfo.max_steer_angle);
+	_nh.getParam("/op_common_params/maxWheelAngle", m_CarInfo.max_wheel_angle);
 	_nh.getParam("/op_common_params/maxAcceleration", m_CarInfo.max_acceleration);
 	_nh.getParam("/op_common_params/maxDeceleration", m_CarInfo.max_deceleration);
+	_nh.getParam("/op_common_params/maxVelocity", m_PlanningParams.maxSpeed);
+	_nh.getParam("/op_common_params/minVelocity", m_PlanningParams.minSpeed);
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
 	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
 
@@ -251,13 +263,15 @@ void BehaviorGen::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPt
 	bNewCurrentPos = true;
 }
 
-void BehaviorGen::callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg)
+void BehaviorGen::callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg)
 {
 	m_VehicleStatus.speed = msg->twist.linear.x;
 	m_CurrentPos.v = m_VehicleStatus.speed;
 
 	if(fabs(m_CurrentPos.v) > 0.1)
+	{
 		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/m_CurrentPos.v);
+	}
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }
@@ -266,7 +280,7 @@ void BehaviorGen::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &m
 {
 	m_VehicleStatus.speed = msg->speed/3.6;
 	m_CurrentPos.v = m_VehicleStatus.speed;
-	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_steer_angle / m_CarInfo.max_steer_value;
+	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_wheel_angle / m_CarInfo.max_steer_value;
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }
@@ -276,10 +290,23 @@ void BehaviorGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 	m_VehicleStatus.speed = msg->twist.twist.linear.x;
 	m_CurrentPos.v = m_VehicleStatus.speed ;
 	if(msg->twist.twist.linear.x != 0)
+	{
 		m_VehicleStatus.steer += atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
+	}
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }
+
+void BehaviorGen::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
+{
+	m_VehicleStatus.speed = msg->speed/3.6;
+	m_VehicleStatus.steer = msg->angle*DEG2RAD;
+	m_CurrentPos.v = m_VehicleStatus.speed;
+	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
+	bVehicleStatus = true;
+//	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
+}
+
 //----------------------------
 
 //Path Planning Section
@@ -613,17 +640,8 @@ void BehaviorGen::VisualizeLocalPlanner()
 void BehaviorGen::SendLocalPlanningTopics()
 {
 	//Send Behavior State
-	geometry_msgs::Twist t;
-	geometry_msgs::TwistStamped behavior;
-	t.linear.x = m_CurrentBehavior.bNewPlan;
-	t.linear.y = m_CurrentBehavior.followDistance;
-	t.linear.z = m_CurrentBehavior.followVelocity;
-	t.angular.x = (int)m_CurrentBehavior.indicator;
-	t.angular.y = (int)m_CurrentBehavior.state;
-	t.angular.z = m_CurrentBehavior.iTrajectory;
-	behavior.twist = t;
-	behavior.header.stamp = ros::Time::now();
-	pub_BehaviorState.publish(behavior);
+	autoware_msgs::Waypoint wp_state = PlannerHNS::ROSHelpers::ConvertBehaviorStateToAutowareWaypoint(m_CurrentBehavior);
+	pub_BehaviorState.publish(wp_state);
 
 	pub_CurrLaneIndex.publish(m_CurrentBehavior.iLane);
 	pub_CurrTrajectoryIndex.publish(m_CurrentBehavior.iTrajectory);
@@ -667,9 +685,9 @@ void BehaviorGen::SendLocalPlanningTopics()
 
 	if(m_CurrentBehavior.bNewPlan)
 	{
-		autoware_msgs::Lane totalTrajectory;
-		PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_BehaviorGenerator.m_Path, totalTrajectory, 0);
-		pub_TotalLocalPath.publish(totalTrajectory);
+		autoware_msgs::Lane curr_slected_trajectory;
+		PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_BehaviorGenerator.m_Path, curr_slected_trajectory, 0);
+		pub_TotalLocalPath.publish(curr_slected_trajectory);
 	}
 
 	autoware_msgs::ExtractedPosition _signal;
@@ -713,9 +731,14 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 			m_Ctrl_cmd.linear_velocity << "," <<
 			m_VehicleStatus.speed << "," <<
 			m_VehicleStatus.steer << "," <<
-			m_BehaviorGenerator.state.pos.x << "," << m_BehaviorGenerator.state.pos.y << "," << m_BehaviorGenerator.state.pos.z << "," << UtilityHNS::UtilityH::SplitPositiveAngle(m_BehaviorGenerator.state.pos.a)+M_PI << ",";
-	if(m_LogData.size() < 150000) //in case I forget to turn off this node .. could fill the hard drive
+			m_BehaviorGenerator.state.pos.x << "," << m_BehaviorGenerator.state.pos.y << "," << m_BehaviorGenerator.state.pos.z << "," << UtilityHNS::UtilityH::SplitPositiveAngle(m_BehaviorGenerator.state.pos.a)+M_PI << "," <<
+			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToGoal << "," <<
+			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToGoal - m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->minStoppingDistance << ",";
+
+	if(m_LogData.size() < 150000 && m_CurrentBehavior.state != PlannerHNS::INITIAL_STATE) //in case I forget to turn off this node .. could fill the hard drive
+	{
 		m_LogData.push_back(dataLine.str());
+	}
 
 	if(m_CurrentBehavior.bNewPlan)
 	{
@@ -791,7 +814,7 @@ void BehaviorGen::MainLoop()
 			m_BehaviorGenerator.UpdateAvoidanceParams(m_PlanningParams.enableSwerving, m_PlanningParams.rollOutNumber);
 #endif
 
-			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, 1, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
+			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
 			//if(!m_bRequestNewPlanDone && m_BehaviorGenerator.m_bRequestNewGlobalPlan)
 			if(m_BehaviorGenerator.m_bRequestNewGlobalPlan)

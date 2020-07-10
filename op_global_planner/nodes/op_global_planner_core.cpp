@@ -121,13 +121,18 @@ GlobalPlanner::GlobalPlanner()
 	}
 	else if(bVelSource == 1)
 	{
-		sub_current_velocity = nh.subscribe("/current_velocity", 1, &GlobalPlanner::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &GlobalPlanner::callbackGetAutowareStatus, this);
 	}
 	else if(bVelSource == 2)
 	{
 		sub_can_info = nh.subscribe("/can_info", 1, &GlobalPlanner::callbackGetCANInfo, this);
 	}
-
+	else if(bVelSource == 3)
+	{
+		std::string velocity_topic;
+		nh.getParam("/vehicle_status_topic", velocity_topic);
+		sub_vehicle_status = nh.subscribe(velocity_topic, 1, &GlobalPlanner::callbackGetVehicleStatus, this);
+	}
 	//Mapping Section
 	if(m_params.mapSource == PlannerHNS::MAP_AUTOWARE)
 	{
@@ -296,7 +301,7 @@ void GlobalPlanner::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 		m_VehicleState.steer += atan(2.7 * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
 }
 
-void GlobalPlanner::callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg)
+void GlobalPlanner::callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg)
 {
 	m_VehicleState.speed = msg->twist.linear.x;
 	m_CurrentPose.v = m_VehicleState.speed;
@@ -311,6 +316,15 @@ void GlobalPlanner::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr 
 	m_CurrentPose.v = m_VehicleState.speed;
 	m_VehicleState.steer = msg->angle * 0.45 / 660;
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleState.tStamp);
+}
+
+void GlobalPlanner::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
+{
+	m_VehicleState.speed = msg->speed/3.6;
+	m_VehicleState.steer = msg->angle*DEG2RAD;
+	m_CurrentPose.v = m_VehicleState.speed;
+
+//	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
 }
 
 bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, PlannerHNS::WayPoint& goalPoint, std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths)

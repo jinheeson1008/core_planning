@@ -227,7 +227,7 @@ void OpenPlannerCarSimulator::ReadParamFromLaunchFile(PlannerHNS::CAR_BASIC_INFO
 	_nh.getParam("length", 		m_CarInfo.length );
 	_nh.getParam("wheelBaseLength", m_CarInfo.wheel_base );
 	_nh.getParam("turningRadius", m_CarInfo.turning_radius );
-	_nh.getParam("maxSteerAngle", m_CarInfo.max_steer_angle );
+	_nh.getParam("maxSteerAngle", m_CarInfo.max_wheel_angle );
 
 	_nh.getParam("steeringDelay", m_ControlParams.SteeringDelay );
 	_nh.getParam("minPursuiteDistance", m_ControlParams.minPursuiteDistance );
@@ -293,7 +293,7 @@ void OpenPlannerCarSimulator::callbackGetJoyStickInfo(const sensor_msgs::JoyCons
 
 	m_JoyDesiredStatus.shift = PlannerHNS::SHIFT_POS_DD;
 	m_JoyDesiredStatus.speed = m_CarInfo.max_speed_forward * acceleration;
-	m_JoyDesiredStatus.steer = m_JoyDesiredStatus.steer*m_CarInfo.max_steer_angle;
+	m_JoyDesiredStatus.steer = m_JoyDesiredStatus.steer*m_CarInfo.max_wheel_angle;
 
 	std::cout << "Steering " << m_JoyDesiredStatus.steer << ", Speed: " <<  m_JoyDesiredStatus.speed <<", acceleration " << acceleration<< ", Braking " << braking <<", MaxSpeed: " << m_CarInfo.max_speed_forward << std::endl;
 }
@@ -933,7 +933,7 @@ void OpenPlannerCarSimulator::MainLoop()
 				/**
 				 *  Local Planning
 				 */
-				m_CurrBehavior = m_LocalPlanner->DoOneStep(dt, currStatus, 1, m_CurrTrafficLight, m_PredictedObjects, false);
+				m_CurrBehavior = m_LocalPlanner->DoOneStep(dt, currStatus, m_CurrTrafficLight, m_PredictedObjects, false);
 
 				/**
 				 * Localization, Odometry Simulation and Update
@@ -959,7 +959,7 @@ void OpenPlannerCarSimulator::MainLoop()
 					/**
 					 *  Local Planning
 					 */
-					m_CurrBehavior = m_LocalPlanner->DoOneStep(dt, currStatus, 1, m_CurrTrafficLight, m_PredictedObjects, false);
+					m_CurrBehavior = m_LocalPlanner->DoOneStep(dt, currStatus, m_CurrTrafficLight, m_PredictedObjects, false);
 
 					/**
 					 * Localization, Odometry Simulation and Update

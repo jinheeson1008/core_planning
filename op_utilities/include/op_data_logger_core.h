@@ -150,7 +150,7 @@ protected:
 
 	//General Section
 	//--------------------------
-	void callbackGetBehaviorState(const geometry_msgs::TwistStampedConstPtr& msg );
+	void callbackGetBehaviorState(const autoware_msgs::WaypointConstPtr& msg );
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
 	//--------------------------
 
@@ -177,7 +177,7 @@ public:
 private:
 	void LogLocalTrafficInfo(double dt);
 	//Helper Functions
-	PlannerHNS::BehaviorState ConvertBehaviorStateFromAutowareToPlannerH(const geometry_msgs::TwistStampedConstPtr& msg);
+	//PlannerHNS::BehaviorState ConvertBehaviorStateFromAutowareToPlannerH(const geometry_msgs::TwistStampedConstPtr& msg);
 	PlannerHNS::STATE_TYPE GetStateFromNumber(const int& iBehState);
 	PlannerHNS::BEH_STATE_TYPE GetBehStateFromNumber(const int& iBehState);
 	void CompareAndLog(VehicleDataContainer& ground_truth, PlannerHNS::DetectedObject& predicted);

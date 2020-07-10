@@ -147,17 +147,14 @@ void FFSteerControl::ReadParamFromLaunchFile(PlannerHNS::CAR_BASIC_INFO& m_CarIn
 	nh.getParam("/ff_waypoint_follower/length", 		m_CarInfo.length );
 	nh.getParam("/ff_waypoint_follower/wheelBaseLength", m_CarInfo.wheel_base );
 	nh.getParam("/ff_waypoint_follower/turningRadius", m_CarInfo.turning_radius );
-	nh.getParam("/ff_waypoint_follower/maxSteerAngle", m_CarInfo.max_steer_angle );
+	nh.getParam("/ff_waypoint_follower/maxSteerAngle", m_CarInfo.max_wheel_angle );
 
 	nh.getParam("/ff_waypoint_follower/maxSteerValue", m_CarInfo.max_steer_value );
-	nh.getParam("/ff_waypoint_follower/minSteerValue", m_CarInfo.min_steer_value );
 	nh.getParam("/ff_waypoint_follower/maxVelocity", m_CarInfo.max_speed_forward );
 	nh.getParam("/ff_waypoint_follower/minVelocity", m_CarInfo.min_speed_forward );
-	nh.getParam("/ff_waypoint_follower/minVelocity", m_CarInfo.max_speed_backword );
 
 	nh.getParam("/ff_waypoint_follower/steeringDelay", m_ControlParams.SteeringDelay );
 	nh.getParam("/ff_waypoint_follower/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
-	nh.getParam("/ff_waypoint_follower/followDistance", m_ControlParams.FollowDistance );
 	nh.getParam("/ff_waypoint_follower/lowpassSteerCutoff", m_ControlParams.LowpassSteerCutoff );
 
 	nh.getParam("/ff_waypoint_follower/steerGainKP", m_ControlParams.Steering_Gain.kP );
@@ -531,10 +528,10 @@ void FFSteerControl::PlannerMainLoop()
 
 				t.angular.z = m_PrevStepTargetStatus.steer;
 
-				if(t.angular.z > m_CarInfo.max_steer_angle)
-					t.angular.z = m_CarInfo.max_steer_angle;
-				else if(t.angular.z < -m_CarInfo.max_steer_angle)
-					t.angular.z = -m_CarInfo.max_steer_angle;
+				if(t.angular.z > m_CarInfo.max_wheel_angle)
+					t.angular.z = m_CarInfo.max_wheel_angle;
+				else if(t.angular.z < -m_CarInfo.max_wheel_angle)
+					t.angular.z = -m_CarInfo.max_wheel_angle;
 
 				twist.twist = t;
 				twist.header.stamp = ros::Time::now();

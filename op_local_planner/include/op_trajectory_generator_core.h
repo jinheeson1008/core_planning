@@ -25,6 +25,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <nav_msgs/Odometry.h>
 #include <autoware_msgs/LaneArray.h>
+#include <autoware_msgs/VehicleStatus.h>
 #include <autoware_can_msgs/CANInfo.h>
 
 #include "op_planner/PlannerH.h"
@@ -81,6 +82,7 @@ protected:
 	ros::Subscriber sub_current_pose;
 	ros::Subscriber sub_current_velocity;
 	ros::Subscriber sub_robot_odom;
+	ros::Subscriber sub_vehicle_status;
 	ros::Subscriber sub_can_info;
 	ros::Subscriber sub_GlobalPlannerPaths;
 
@@ -88,9 +90,10 @@ protected:
 	// Callback function for subscriber.
 	void callbackGetInitPose(const geometry_msgs::PoseWithCovarianceStampedConstPtr &input);
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-	void callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPtr& msg);
+	void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
 	void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
 	void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
+	void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 
 	//Helper Functions

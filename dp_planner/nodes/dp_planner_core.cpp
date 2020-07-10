@@ -258,7 +258,7 @@ void PlannerX::UpdatePlanningParams()
 	nh.getParam("/dp_planner/length", vehicleInfo.length);
 	nh.getParam("/dp_planner/wheelBaseLength", vehicleInfo.wheel_base);
 	nh.getParam("/dp_planner/turningRadius", vehicleInfo.turning_radius);
-	nh.getParam("/dp_planner/maxSteerAngle", vehicleInfo.max_steer_angle);
+	nh.getParam("/dp_planner/maxSteerAngle", vehicleInfo.max_wheel_angle);
 	vehicleInfo.max_speed_forward = params.maxSpeed;
 	vehicleInfo.min_speed_forward = params.minSpeed;
 
@@ -447,7 +447,7 @@ void PlannerX::callbackGetVehicleStatus(const geometry_msgs::TwistStampedConstPt
 void PlannerX::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg)
 {
 	m_VehicleState.speed = msg->speed/3.6;
-	m_VehicleState.steer = msg->angle * m_LocalPlanner.m_CarInfo.max_steer_angle / m_LocalPlanner.m_CarInfo.max_steer_value;
+	m_VehicleState.steer = msg->angle * m_LocalPlanner.m_CarInfo.max_wheel_angle / m_LocalPlanner.m_CarInfo.max_steer_value;
 	std::cout << "Can Info, Speed: "<< m_VehicleState.speed << ", Steering: " << m_VehicleState.steer  << std::endl;
 }
 
