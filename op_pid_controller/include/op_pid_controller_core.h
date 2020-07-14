@@ -46,8 +46,11 @@ protected:
 	bool bNewTrajectory;
 	PlannerHNS::BehaviorState m_CurrentBehavior;
 	bool bNewBehaviorState;
-
 	bool m_bAutoCalibrate;
+
+	std::vector<std::pair<double, double> > m_TargetTestSpeeds;
+	std::vector<double> dt_list;
+	bool m_bSpeedTest;
 
 	//ControlCommandParams m_CmdParams;
 	PlannerHNS::CAR_BASIC_INFO m_CarInfo;

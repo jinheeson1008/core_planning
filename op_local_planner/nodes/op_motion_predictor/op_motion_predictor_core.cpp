@@ -66,7 +66,7 @@ MotionPrediction::MotionPrediction()
 	}
 	else if(bVelSource == 1)
 	{
-		sub_current_velocity = nh.subscribe("/current_velocity", 1, &MotionPrediction::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &MotionPrediction::callbackGetAutowareStatus, this);
 	}
 	else if(bVelSource == 2)
 	{

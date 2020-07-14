@@ -67,6 +67,20 @@ MotionController::MotionController()
 
 
   	m_Controller.Init(m_ControlParams, m_CarInfo, true, m_bAutoCalibrate);
+  	m_Controller.SetCruiseSpeedRange(0);
+  	//Test PID Code :
+  	m_bSpeedTest = true;
+  	m_TargetTestSpeeds.push_back({0,10});
+  	m_TargetTestSpeeds.push_back({10,0.25});
+	m_TargetTestSpeeds.push_back({0.25,10});
+  	m_TargetTestSpeeds.push_back({10,0});
+//  	m_TargetTestSpeeds.push_back({10,9});
+//  	m_TargetTestSpeeds.push_back({9,8});
+//  	m_TargetTestSpeeds.push_back({8,7});
+//  	m_TargetTestSpeeds.push_back({7,6});
+//  	m_TargetTestSpeeds.push_back({6,5});
+//  	m_TargetTestSpeeds.push_back({5,4});
+
 	std::cout << "OP PID controller initialized successfully " << std::endl;
 }
 
@@ -260,20 +274,50 @@ void MotionController::MainLoop()
 	struct timespec dt_timer;
 	UtilityHNS::UtilityH::GetTickCount(dt_timer);
 	double dt = 1.0/(double)freq;
+	double avg_dt = dt;
 
 	while (ros::ok())
 	{
 		ros::spinOnce();
 
 		dt = UtilityHNS::UtilityH::GetTimeDiffNow(dt_timer);
+		dt_list.push_back(dt);
+		if(dt_list.size() > freq)
+		{
+			double dt_sum = 0;
+			for(auto& step_dt: dt_list)
+			{
+				dt_sum += step_dt;
+			}
+			avg_dt = dt_sum / dt_list.size();
+			dt_list.erase(dt_list.begin()+0);
+		}
 		UtilityHNS::UtilityH::GetTickCount(dt_timer);
 
-		if(dt < 0.001) //no control dt is less than 0.001 seconds
+		if(m_bSpeedTest && m_TargetTestSpeeds.size() > 0)
 		{
-			dt = 1.0/(double)freq;
+			m_CurrentBehavior.maxVelocity = m_TargetTestSpeeds.front().second;
+
+			if((m_TargetTestSpeeds.front().second > m_TargetTestSpeeds.front().first && m_VehicleStatus.speed >= m_TargetTestSpeeds.front().second) ||
+					(m_TargetTestSpeeds.front().second < m_TargetTestSpeeds.front().first && m_VehicleStatus.speed <= m_TargetTestSpeeds.front().second))
+			{
+				m_TargetTestSpeeds.erase(m_TargetTestSpeeds.begin()+0);
+				m_Controller.ResetLogTime();
+			}
+		}
+		else
+		{
+			m_CurrentBehavior.maxVelocity = 0;
 		}
 
-		m_TargetStatus = m_Controller.DoOneStep(1.0/(double)freq, m_CurrentBehavior, m_FollowingTrajectory, m_CurrentPos, m_VehicleStatus, bNewTrajectory);
+		if(m_VehicleStatus.speed < 0.5)
+		{
+			m_Controller.ResetLogTime();
+		}
+
+		std::cout << "Step DT:" << dt << ", Average DT: " << avg_dt << std::endl;
+
+		m_TargetStatus = m_Controller.DoOneStep(avg_dt, m_CurrentBehavior, m_FollowingTrajectory, m_CurrentPos, m_VehicleStatus, bNewTrajectory);
 
 //		std::cout << "Curr Steer Angle: " << m_VehicleStatus.steer << ", Target Steer Angle: " << m_TargetStatus.steer_torque << ", Max Steer   : " << m_CarInfo.max_wheel_angle << std::endl;
 //		std::cout << "Curr Velocity   : " << m_VehicleStatus.speed << ", Target Accel   : " << m_TargetStatus.accel_stroke << ", Max Velocity: " << m_CurrentBehavior.maxVelocity << std::endl;

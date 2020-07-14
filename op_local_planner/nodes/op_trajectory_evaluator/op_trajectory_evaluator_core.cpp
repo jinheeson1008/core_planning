@@ -59,7 +59,7 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 	}
 	else if(bVelSource == 1)
 	{
-		sub_current_velocity = nh.subscribe("/current_velocity", 1, &TrajectoryEvalCore::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &TrajectoryEvalCore::callbackGetAutowareStatus, this);
 	}
 	else if(bVelSource == 2)
 	{

@@ -46,7 +46,7 @@
 	<arg name="additionalBrakingDistance" 	default="3.0"  />
 	<arg name="goalDiscoveryDistance" 		default="1.0"  />
 	
-	<arg name="giveUpDistance" 				default="-4.0"  />
+	<arg name="giveUpDistance" 				default="-1.0"  />
 			
 	<arg name="velocitySource"				default="1" /> <!-- read velocities from (0- Odometry, 1- autoware current_velocities, 2- car_info, 3- vehicle status ) "" -->
 	<arg name="vel_odom_topic"				default="/carla/ego_vehicle/odometry" />

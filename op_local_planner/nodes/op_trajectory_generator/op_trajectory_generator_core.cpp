@@ -56,7 +56,7 @@ TrajectoryGen::TrajectoryGen()
 	}
 	else if(bVelSource == 1)
 	{
-		sub_current_velocity = nh.subscribe("/current_velocity", 1, &TrajectoryGen::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &TrajectoryGen::callbackGetAutowareStatus, this);
 	}
 	else if(bVelSource == 2)
 	{

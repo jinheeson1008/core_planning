@@ -16,7 +16,7 @@
 	<arg name="mapSource" 						default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml file=2, lanelet2 file=3, kml map file path from runtime manager = 4 -->
 	<arg name="mapFileName" 					default="" /> <!-- incase of kml map source -->
 	<arg name="lanelet2_origin"					default="0,0,0" /> <!-- GPS origin for lanelet2 map files, Lat, Long, Alt  --> 	
-	<arg name="destinationFileName" 			default="/home/hatem/Con-Projects/ADASTec/data/BusStop/destinations_out.csv" />	
+	<arg name="destinationFileName" 			default="" />	
 	
 <node pkg="op_global_planner" type="op_global_planner" name="op_global_planner" output="screen">
 		

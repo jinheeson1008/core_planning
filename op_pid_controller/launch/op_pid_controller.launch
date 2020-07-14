@@ -22,13 +22,13 @@
 	<arg name="velocityGainKI" 				default="0.0"/>
 	<arg name="velocityGainKD" 				default="0.0"/>
 	
-	<arg name="accelGainKP" 				default="10.0"/>
-	<arg name="accelGainKI" 				default="1.75"/>
-	<arg name="accelGainKD" 				default="0.05"/>
+	<arg name="accelGainKP" 				default="5.0"/>
+	<arg name="accelGainKI" 				default="3.0"/>
+	<arg name="accelGainKD" 				default="0.005"/>
 	
-	<arg name="brakeGainKP" 				default="1.5"/>
+	<arg name="brakeGainKP" 				default="2.0"/>
 	<arg name="brakeGainKI" 				default="0.05"/>
-	<arg name="brakeGainKD" 				default="0.0"/> 		 	
+	<arg name="brakeGainKD" 				default="0.01"/> 		 	
 	
 	<node pkg="op_pid_controller" type="op_pid_controller" name="op_pid_controller" output="screen">			
 		<param name="steer_mode" 				value="$(arg steer_mode)" />

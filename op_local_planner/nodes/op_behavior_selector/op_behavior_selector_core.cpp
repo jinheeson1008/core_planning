@@ -91,7 +91,7 @@ BehaviorGen::BehaviorGen()
 	}
 	else if(bVelSource == 1)
 	{
-		sub_current_velocity = nh.subscribe("/current_velocity", 1, &BehaviorGen::callbackGetVehicleStatus, this);
+		sub_current_velocity = nh.subscribe("/current_velocity", 1, &BehaviorGen::callbackGetAutowareStatus, this);
 	}
 	else if(bVelSource == 2)
 	{
@@ -313,7 +313,7 @@ void BehaviorGen::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusCon
 //----------------------------
 void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
-	if(msg->lanes.size() > 0)
+	if(msg->lanes.size() > 0 && bMap)
 	{
 		m_GlobalPaths.clear();
 		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
@@ -802,7 +802,7 @@ void BehaviorGen::MainLoop()
 			}
 		}
 
-		if(bNewCurrentPos)
+		if(bNewCurrentPos && m_GlobalPathsToUse.size() > 0)
 		{
 
 			for(auto& x: m_CurrTrafficLight)
@@ -838,7 +838,9 @@ void BehaviorGen::MainLoop()
 #endif
 		}
 		else
+		{
 			sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 	1,		&BehaviorGen::callbackGetGlobalPlannerPath, 	this);
+		}
 
 		loop_rate.sleep();
 	}
