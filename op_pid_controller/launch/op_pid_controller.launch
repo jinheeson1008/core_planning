@@ -5,7 +5,11 @@
 	<arg name="auto_calibration_mode"		default="false" />
 	
 	<arg name="lowpass_steer_cutoff" 		default="5.0"/> <!-- Hz -->
-	<arg name="control_frequency" 			default="50"/> <!-- Hz -->
+	<arg name="control_frequency" 			default="20"/> <!-- Hz -->
+	
+	
+	<arg name="calibrate_max_velocity"		default="20"/>
+	<arg name="avg_engine_brake_accel"		default="-2.5"/>	
 	
 	<arg name="max_steer_value"				default="660"/> <!-- degrees -->	
 	<arg name="max_steer_torque"			default="100"/>
@@ -37,6 +41,9 @@
 		
 		<param name="lowpass_steer_cutoff" 		value="$(arg lowpass_steer_cutoff)" />
 		<param name="control_frequency" 		value="$(arg control_frequency)" />
+		
+		<param name="calibrate_max_velocity" 	value="$(arg calibrate_max_velocity)" />
+		<param name="avg_engine_brake_accel" 	value="$(arg avg_engine_brake_accel)" />
 		
 		<param name="max_steer_value" 			value="$(arg max_steer_value)" />		
 		<param name="max_accel_value" 			value="$(arg max_accel_value)" />

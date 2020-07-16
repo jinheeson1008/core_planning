@@ -643,8 +643,11 @@ void BehaviorGen::SendLocalPlanningTopics()
 	autoware_msgs::Waypoint wp_state = PlannerHNS::ROSHelpers::ConvertBehaviorStateToAutowareWaypoint(m_CurrentBehavior);
 	pub_BehaviorState.publish(wp_state);
 
-	pub_CurrLaneIndex.publish(m_CurrentBehavior.iLane);
-	pub_CurrTrajectoryIndex.publish(m_CurrentBehavior.iTrajectory);
+	std_msgs::Int32 ilane_msg, itraj_msg;
+	ilane_msg.data = m_CurrentBehavior.iLane;
+	itraj_msg.data = m_CurrentBehavior.iTrajectory;
+	pub_CurrLaneIndex.publish(ilane_msg);
+	pub_CurrTrajectoryIndex.publish(itraj_msg);
 
 	//Send Ego Vehicle Simulation Pose Data
 	geometry_msgs::PoseArray sim_data;
@@ -821,7 +824,9 @@ void BehaviorGen::MainLoop()
 			{
 				if(m_bRequestNewPlanSent == false)
 				{
-					pub_RequestReplan.publish(true);
+					std_msgs::Bool replan_req;
+					replan_req.data = true;
+					pub_RequestReplan.publish(replan_req);
 					m_bRequestNewPlanSent = true;
 				}
 			}

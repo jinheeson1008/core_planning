@@ -69,11 +69,13 @@ MotionController::MotionController()
   	m_Controller.Init(m_ControlParams, m_CarInfo, true, m_bAutoCalibrate);
   	m_Controller.SetCruiseSpeedRange(0);
   	//Test PID Code :
+  	double max_v = 0;
+	_nh.getParam("/op_pid_controller/calibrate_max_velocity", max_v );
   	m_bSpeedTest = true;
-  	m_TargetTestSpeeds.push_back({0,10});
-  	m_TargetTestSpeeds.push_back({10,0.25});
-	m_TargetTestSpeeds.push_back({0.25,10});
-  	m_TargetTestSpeeds.push_back({10,0});
+  	m_TargetTestSpeeds.push_back({0,max_v});
+  	m_TargetTestSpeeds.push_back({max_v,0});
+	m_TargetTestSpeeds.push_back({0,max_v});
+  	m_TargetTestSpeeds.push_back({max_v,0});
 //  	m_TargetTestSpeeds.push_back({10,9});
 //  	m_TargetTestSpeeds.push_back({9,8});
 //  	m_TargetTestSpeeds.push_back({8,7});
@@ -294,28 +296,28 @@ void MotionController::MainLoop()
 		}
 		UtilityHNS::UtilityH::GetTickCount(dt_timer);
 
-		if(m_bSpeedTest && m_TargetTestSpeeds.size() > 0)
-		{
-			m_CurrentBehavior.maxVelocity = m_TargetTestSpeeds.front().second;
+//		if(m_bSpeedTest && m_TargetTestSpeeds.size() > 0)
+//		{
+//			m_CurrentBehavior.maxVelocity = m_TargetTestSpeeds.front().second;
+//
+//			if((m_TargetTestSpeeds.front().second > m_TargetTestSpeeds.front().first && m_VehicleStatus.speed >= m_TargetTestSpeeds.front().second) ||
+//					(m_TargetTestSpeeds.front().second < m_TargetTestSpeeds.front().first && m_VehicleStatus.speed <= m_TargetTestSpeeds.front().second))
+//			{
+//				m_TargetTestSpeeds.erase(m_TargetTestSpeeds.begin()+0);
+//				m_Controller.ResetLogTime(0,0);
+//			}
+//		}
+//		else
+//		{
+//			m_CurrentBehavior.maxVelocity = 0;
+//		}
+//
+//		if(m_VehicleStatus.speed == 0.0)
+//		{
+//			m_Controller.ResetLogTime(0,0);
+//		}
 
-			if((m_TargetTestSpeeds.front().second > m_TargetTestSpeeds.front().first && m_VehicleStatus.speed >= m_TargetTestSpeeds.front().second) ||
-					(m_TargetTestSpeeds.front().second < m_TargetTestSpeeds.front().first && m_VehicleStatus.speed <= m_TargetTestSpeeds.front().second))
-			{
-				m_TargetTestSpeeds.erase(m_TargetTestSpeeds.begin()+0);
-				m_Controller.ResetLogTime();
-			}
-		}
-		else
-		{
-			m_CurrentBehavior.maxVelocity = 0;
-		}
-
-		if(m_VehicleStatus.speed < 0.5)
-		{
-			m_Controller.ResetLogTime();
-		}
-
-		std::cout << "Step DT:" << dt << ", Average DT: " << avg_dt << std::endl;
+//		std::cout << "Step DT:" << dt << ", Average DT: " << avg_dt << std::endl;
 
 		m_TargetStatus = m_Controller.DoOneStep(avg_dt, m_CurrentBehavior, m_FollowingTrajectory, m_CurrentPos, m_VehicleStatus, bNewTrajectory);
 
