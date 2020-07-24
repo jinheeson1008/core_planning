@@ -321,7 +321,7 @@ void GlobalPlanner::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr 
 void GlobalPlanner::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
 {
 	m_VehicleState.speed = msg->speed/3.6;
-	m_VehicleState.steer = msg->angle*DEG2RAD;
+	m_VehicleState.steer = -msg->angle*DEG2RAD;
 	m_CurrentPose.v = m_VehicleState.speed;
 
 //	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;

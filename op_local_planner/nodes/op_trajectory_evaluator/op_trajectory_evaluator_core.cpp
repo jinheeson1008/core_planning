@@ -31,6 +31,8 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 	m_bUseMoveingObjectsPrediction = false;
 	bEnableSmoothGlobalPathForCARLA = false;
 	m_bKeepCurrentIfPossible = false;
+	bNewBehaviorState = false;
+	m_AdditionalFollowDistance = 10; // meters
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
@@ -74,8 +76,9 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryEvalCore::callbackGetGlobalPlannerPath, this);
 	sub_LocalPlannerPaths = nh.subscribe("/local_trajectories", 1, &TrajectoryEvalCore::callbackGetLocalPlannerPath, this);
 	sub_predicted_objects = nh.subscribe("/predicted_objects", 1, &TrajectoryEvalCore::callbackGetPredictedObjects, this);
-	sub_current_lane_index = nh.subscribe("/op_curr_lane_index", 1, &TrajectoryEvalCore::callbackGetLaneIndex, this);
-	sub_current_trajectory_index = nh.subscribe("/op_curr_trajectory_index", 1, &TrajectoryEvalCore::callbackGetTrajectoryIndex, this);
+	//sub_current_lane_index = nh.subscribe("/op_curr_lane_index", 1, &TrajectoryEvalCore::callbackGetLaneIndex, this);
+	//sub_current_trajectory_index = nh.subscribe("/op_curr_trajectory_index", 1, &TrajectoryEvalCore::callbackGetTrajectoryIndex, this);
+	sub_behavior_state = _nh.subscribe("/op_current_behavior",	1, &TrajectoryEvalCore::callbackGetBehaviorState, 	this);
 
 	m_TrajectoryCostsCalculator.SetEvalParams(m_EvaluationParams);
 	PlannerHNS::ROSHelpers::InitCollisionPointsMarkers(500, m_CollisionsDummy);
@@ -229,10 +232,10 @@ void TrajectoryEvalCore::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& 
 void TrajectoryEvalCore::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
 {
 	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = msg->angle*DEG2RAD;
+	m_VehicleStatus.steer = -msg->angle*DEG2RAD;
 	m_CurrentPos.v = m_VehicleStatus.speed;
 	bVehicleStatus = true;
-//	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
+	//std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
 }
 
 void TrajectoryEvalCore::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
@@ -367,14 +370,21 @@ void TrajectoryEvalCore::callbackGetPredictedObjects(const autoware_msgs::Detect
 	}
 }
 
-void TrajectoryEvalCore::callbackGetTrajectoryIndex(const std_msgs::Int32ConstPtr& msg)
-{
-	m_CurrentBehavior.iTrajectory = msg->data;
-}
+//void TrajectoryEvalCore::callbackGetTrajectoryIndex(const std_msgs::Int32ConstPtr& msg)
+//{
+//	m_CurrentBehavior.iTrajectory = msg->data;
+//}
+//
+//void TrajectoryEvalCore::callbackGetLaneIndex(const std_msgs::Int32ConstPtr& msg)
+//{
+//	m_CurrentBehavior.iLane = msg->data;
+//}
 
-void TrajectoryEvalCore::callbackGetLaneIndex(const std_msgs::Int32ConstPtr& msg)
+void TrajectoryEvalCore::callbackGetBehaviorState(const autoware_msgs::WaypointConstPtr& msg )
 {
-	m_CurrentBehavior.iLane = msg->data;
+	m_CurrentBehavior = PlannerHNS::ROSHelpers::ConvertAutowareWaypointToBehaviorState(*msg);
+	//std::cout << "Receive Behavior State : " << m_CurrentBehavior.state << ", Target Speed: " << m_CurrentBehavior.maxVelocity << ", StopD: " << m_CurrentBehavior.stopDistance << ", FollowD: " << m_CurrentBehavior.followDistance << std::endl;
+	bNewBehaviorState = true;
 }
 
 void TrajectoryEvalCore::CollectRollOutsByGlobalPath()
@@ -483,8 +493,14 @@ void TrajectoryEvalCore::MainLoop()
 				CollectRollOutsByGlobalPath();
 				if(!m_PlanningParams.enableLaneChange)
 				{
+					PlannerHNS::PlanningParams planningParams = m_PlanningParams;
+					if(m_CurrentBehavior.state == PlannerHNS::FOLLOW_STATE)
+					{
+						planningParams.minFollowingDistance += m_AdditionalFollowDistance;
+					}
+
 					PlannerHNS::TrajectoryCost tc = m_TrajectoryCostsCalculator.doOneStep(m_LanesRollOuts.at(0), m_GlobalPathSections.at(0), m_CurrentPos,
-							m_PlanningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
+							planningParams, m_CarInfo,m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 					tcs.push_back(tc);
 
 					for(unsigned int i=0; i < m_TrajectoryCostsCalculator.local_roll_outs_.size(); i++)
@@ -509,13 +525,19 @@ void TrajectoryEvalCore::MainLoop()
 				}
 				else
 				{
+					PlannerHNS::PlanningParams planningParams = m_PlanningParams;
+					if(m_CurrentBehavior.state == PlannerHNS::FOLLOW_STATE)
+					{
+						planningParams.minFollowingDistance += m_AdditionalFollowDistance;
+					}
+
 					//std::cout << "Start New Evaluations --------------------------- vvvvvvvvvvvvvvvv " <<  std::endl;
 					for(unsigned int ig = 0; ig < m_GlobalPathSections.size(); ig++)
 					{
 //						std::cout << "Best Lane From Behavior Selector: " << m_CurrentBehavior.iLane << ", Trajectory: " << m_CurrentBehavior.iTrajectory << ", Curr Lane: " << ig << std::endl;
 
 						PlannerHNS::TrajectoryCost temp_tc = m_TrajectoryCostsCalculator.doOneStep(m_LanesRollOuts.at(ig), m_GlobalPathSections.at(ig), m_CurrentPos,
-								m_PlanningParams, m_CarInfo, m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
+								planningParams, m_CarInfo, m_VehicleStatus, m_PredictedObjects, !m_bUseMoveingObjectsPrediction, m_CurrentBehavior.iTrajectory, m_bKeepCurrentIfPossible);
 
 
 //						if((m_GlobalPathSections.size() == 3 && ig == 2) || (m_GlobalPathSections.size() == 2 && ig == 1))

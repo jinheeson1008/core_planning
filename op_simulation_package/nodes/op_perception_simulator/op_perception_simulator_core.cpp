@@ -47,26 +47,32 @@ OpenPlannerSimulatorPerception::OpenPlannerSimulatorPerception()
 	nh.getParam("/op_perception_simulator/simObjNumber" , m_DecParams.nSimuObjs);
 	nh.getParam("/op_perception_simulator/GuassianErrorFactor" , m_DecParams.errFactor);
 	nh.getParam("/op_perception_simulator/pointCloudPointsNumber" , m_DecParams.nPointsPerObj);
+	nh.getParam("/op_perception_simulator/useNavGoalToSetStaticObstacle" , m_DecParams.bUseNavGoal);
 
 	pub_DetectedObjects = nh.advertise<autoware_msgs::CloudClusterArray>("simu_cloud_clusters",1);
 
-	sub_simulated_obstacle_pose_rviz = nh.subscribe("/move_base_simple/goal", 1, &OpenPlannerSimulatorPerception::callbackGetRvizPoint,	this);
-
-	for(int i=1; i <= m_DecParams.nSimuObjs; i++)
+	if(m_DecParams.bUseNavGoal == true)
 	{
-		std::ostringstream str_pose;
-		//str_pose << "/op_car_simulator" << i << "/sim_box_pose_" << i;
-		str_pose << "/sim_box_pose_" << i;
-		std::cout << "Subscribe to Topic : " <<  str_pose.str() <<  std::endl;
+		sub_simulated_obstacle_pose_rviz = nh.subscribe("/move_base_simple/goal", 1, &OpenPlannerSimulatorPerception::callbackGetRvizPoint,	this);
+	}
+	else
+	{
+		for(int i=1; i <= m_DecParams.nSimuObjs; i++)
+		{
+			std::ostringstream str_pose;
+			//str_pose << "/op_car_simulator" << i << "/sim_box_pose_" << i;
+			str_pose << "/sim_box_pose_" << i;
+			std::cout << "Subscribe to Topic : " <<  str_pose.str() <<  std::endl;
+
+			ros::Subscriber _sub;
+			_sub =  nh.subscribe(str_pose.str(), 1, &OpenPlannerSimulatorPerception::callbackGetSimuData, this);
+			sub_objs.push_back(_sub);
+		}
 
 		ros::Subscriber _sub;
-		_sub =  nh.subscribe(str_pose.str(), 10, &OpenPlannerSimulatorPerception::callbackGetSimuData, this);
+		_sub =  nh.subscribe("/sim_box_pose_ego", 1, &OpenPlannerSimulatorPerception::callbackGetSimuData, this);
 		sub_objs.push_back(_sub);
 	}
-
-	ros::Subscriber _sub;
-	_sub =  nh.subscribe("/sim_box_pose_ego", 10, &OpenPlannerSimulatorPerception::callbackGetSimuData, this);
-	sub_objs.push_back(_sub);
 
 	std::cout << "OpenPlannerSimulatorPerception initialized successfully " << std::endl;
 
@@ -220,7 +226,7 @@ autoware_msgs::CloudCluster OpenPlannerSimulatorPerception::GenerateSimulatedObs
 void OpenPlannerSimulatorPerception::MainLoop()
 {
 
-	ros::Rate loop_rate(15);
+	ros::Rate loop_rate(50);
 
 	while (ros::ok())
 	{
@@ -241,14 +247,16 @@ void OpenPlannerSimulatorPerception::MainLoop()
 
 		m_ObjClustersArray.header.frame_id = "/map";
 
-		if(m_bSetSimulatedObj)
+		if(m_DecParams.bUseNavGoal)
 		{
-			m_AllObjClustersArray = m_ObjClustersArray;
-			m_AllObjClustersArray.clusters.push_back(m_SimulatedCluter);
-			//std::cout << "Sending Fake Obstacles: " << m_AllObjClustersArray.clusters.size() <<std::endl;
-			pub_DetectedObjects.publish(m_AllObjClustersArray);
+			if(m_bSetSimulatedObj)
+			{
+				m_AllObjClustersArray = m_ObjClustersArray;
+				m_AllObjClustersArray.clusters.push_back(m_SimulatedCluter);
+				pub_DetectedObjects.publish(m_AllObjClustersArray);
+			}
 		}
-		else
+		else if(m_ObjClustersArray.clusters.size() > 0)
 		{
 			pub_DetectedObjects.publish(m_ObjClustersArray);
 		}

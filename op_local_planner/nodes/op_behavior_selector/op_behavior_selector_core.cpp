@@ -300,7 +300,7 @@ void BehaviorGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 void BehaviorGen::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
 {
 	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = msg->angle*DEG2RAD;
+	m_VehicleStatus.steer = -msg->angle*DEG2RAD;
 	m_CurrentPos.v = m_VehicleStatus.speed;
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
@@ -669,7 +669,7 @@ void BehaviorGen::SendLocalPlanningTopics()
 	sim_data.poses.push_back(p_id);
 	sim_data.poses.push_back(p_pose);
 	sim_data.poses.push_back(p_box);
-	pub_SimuBoxPose.publish(sim_data);
+	//pub_SimuBoxPose.publish(sim_data); // enable to simulate collision with other simulated vehicles
 
 	//Send Trajectory Data to path following nodes
 	std_msgs::Int32 closest_waypoint;

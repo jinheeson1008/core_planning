@@ -75,9 +75,12 @@ protected:
 
   	PlannerHNS::EvaluationParams m_EvaluationParams;
   	PlannerHNS::PlanningParams m_PlanningParams;
+  	PlannerHNS::PlanningParams m_ModPlanningParams;
   	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
 
   	PlannerHNS::BehaviorState m_CurrentBehavior;
+  	bool bNewBehaviorState;
+  	double m_AdditionalFollowDistance;
 
 
   	visualization_msgs::MarkerArray m_CollisionsDummy;
@@ -107,6 +110,7 @@ protected:
 	ros::Subscriber sub_predicted_objects;
 	ros::Subscriber sub_current_trajectory_index;
 	ros::Subscriber sub_current_lane_index;
+	ros::Subscriber sub_behavior_state;
 
 
 
@@ -119,8 +123,9 @@ protected:
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg);
-	void callbackGetTrajectoryIndex(const std_msgs::Int32ConstPtr& msg);
-	void callbackGetLaneIndex(const std_msgs::Int32ConstPtr& msg);
+//	void callbackGetTrajectoryIndex(const std_msgs::Int32ConstPtr& msg);
+//	void callbackGetLaneIndex(const std_msgs::Int32ConstPtr& msg);
+	void callbackGetBehaviorState(const autoware_msgs::WaypointConstPtr& msg);
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);

@@ -26,6 +26,7 @@ MotionController::MotionController()
 	bNewBehaviorState = false;
 	bNewVehicleStatus = false;
 	m_bAutoCalibrate = false;
+	m_bVelocityCalibrate = false;
 
 	ros::NodeHandle _nh;
 
@@ -67,21 +68,16 @@ MotionController::MotionController()
 
 
   	m_Controller.Init(m_ControlParams, m_CarInfo, true, m_bAutoCalibrate);
-  	m_Controller.SetCruiseSpeedRange(0);
-  	//Test PID Code :
-  	double max_v = 0;
-	_nh.getParam("/op_pid_controller/calibrate_max_velocity", max_v );
-  	m_bSpeedTest = true;
-  	m_TargetTestSpeeds.push_back({0,max_v});
-  	m_TargetTestSpeeds.push_back({max_v,0});
-	m_TargetTestSpeeds.push_back({0,max_v});
-  	m_TargetTestSpeeds.push_back({max_v,0});
-//  	m_TargetTestSpeeds.push_back({10,9});
-//  	m_TargetTestSpeeds.push_back({9,8});
-//  	m_TargetTestSpeeds.push_back({8,7});
-//  	m_TargetTestSpeeds.push_back({7,6});
-//  	m_TargetTestSpeeds.push_back({6,5});
-//  	m_TargetTestSpeeds.push_back({5,4});
+
+  	if(m_bVelocityCalibrate)
+  	{
+  		double max_v = 0;
+		_nh.getParam("/op_pid_controller/calibrate_max_velocity", max_v );
+  		m_TargetTestSpeeds.push_back({0,max_v});
+  		m_TargetTestSpeeds.push_back({max_v,0});
+		m_TargetTestSpeeds.push_back({0,max_v});
+  		m_TargetTestSpeeds.push_back({max_v,0});
+  	}
 
 	std::cout << "OP PID controller initialized successfully " << std::endl;
 }
@@ -117,7 +113,12 @@ void MotionController::UpdateControlParams(ros::NodeHandle& nh)
 	int drive_mode = 0;
 	nh.getParam("/op_pid_controller/steer_mode", steering_mode );
 	nh.getParam("/op_pid_controller/drive_mode", drive_mode);
-	nh.getParam("/op_pid_controller/auto_calibration_mode", m_bAutoCalibrate );
+	//nh.getParam("/op_pid_controller/auto_calibration_mode", m_bAutoCalibrate ); // disabled for now
+	nh.getParam("/op_pid_controller/manual_velocity_calibration", m_bVelocityCalibrate );
+
+
+	nh.getParam("/op_pid_controller/avg_engine_brake_accel", m_ControlParams.avg_engine_brake_accel );
+	nh.getParam("/op_pid_controller/min_follow_safe_distance", m_ControlParams.min_safe_follow_distance);
 
 	nh.getParam("/op_pid_controller/lowpass_steer_cutoff", m_ControlParams.LowpassSteerCutoff );
 	nh.getParam("/op_pid_controller/control_frequency", m_ControlParams.ControlFrequency );
@@ -200,7 +201,7 @@ void MotionController::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& ms
 void MotionController::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
 {
 	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = msg->angle*DEG2RAD;
+	m_VehicleStatus.steer = -msg->angle*DEG2RAD;
 	m_CurrentPos.v = m_VehicleStatus.speed;
 
 //	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
@@ -283,6 +284,8 @@ void MotionController::MainLoop()
 		ros::spinOnce();
 
 		dt = UtilityHNS::UtilityH::GetTimeDiffNow(dt_timer);
+		UtilityHNS::UtilityH::GetTickCount(dt_timer);
+
 		dt_list.push_back(dt);
 		if(dt_list.size() > freq)
 		{
@@ -294,30 +297,30 @@ void MotionController::MainLoop()
 			avg_dt = dt_sum / dt_list.size();
 			dt_list.erase(dt_list.begin()+0);
 		}
-		UtilityHNS::UtilityH::GetTickCount(dt_timer);
 
-//		if(m_bSpeedTest && m_TargetTestSpeeds.size() > 0)
-//		{
-//			m_CurrentBehavior.maxVelocity = m_TargetTestSpeeds.front().second;
-//
-//			if((m_TargetTestSpeeds.front().second > m_TargetTestSpeeds.front().first && m_VehicleStatus.speed >= m_TargetTestSpeeds.front().second) ||
-//					(m_TargetTestSpeeds.front().second < m_TargetTestSpeeds.front().first && m_VehicleStatus.speed <= m_TargetTestSpeeds.front().second))
-//			{
-//				m_TargetTestSpeeds.erase(m_TargetTestSpeeds.begin()+0);
-//				m_Controller.ResetLogTime(0,0);
-//			}
-//		}
-//		else
-//		{
-//			m_CurrentBehavior.maxVelocity = 0;
-//		}
-//
-//		if(m_VehicleStatus.speed == 0.0)
-//		{
-//			m_Controller.ResetLogTime(0,0);
-//		}
+		if(m_bVelocityCalibrate)
+		{
+			if(m_TargetTestSpeeds.size() > 0)
+			{
+				m_CurrentBehavior.maxVelocity = m_TargetTestSpeeds.front().second;
 
-//		std::cout << "Step DT:" << dt << ", Average DT: " << avg_dt << std::endl;
+				if((m_TargetTestSpeeds.front().second > m_TargetTestSpeeds.front().first && m_VehicleStatus.speed >= m_TargetTestSpeeds.front().second) ||
+						(m_TargetTestSpeeds.front().second < m_TargetTestSpeeds.front().first && m_VehicleStatus.speed <= m_TargetTestSpeeds.front().second))
+				{
+					m_TargetTestSpeeds.erase(m_TargetTestSpeeds.begin()+0);
+					m_Controller.ResetLogTime(0,0);
+				}
+			}
+			else
+			{
+				m_CurrentBehavior.maxVelocity = 0;
+			}
+
+			if(m_VehicleStatus.speed == 0.0)
+			{
+				m_Controller.ResetLogTime(0,0);
+			}
+		}
 
 		m_TargetStatus = m_Controller.DoOneStep(avg_dt, m_CurrentBehavior, m_FollowingTrajectory, m_CurrentPos, m_VehicleStatus, bNewTrajectory);
 
@@ -335,19 +338,6 @@ void MotionController::MainLoop()
 		visualization_msgs::MarkerArray points_markers;
 		displayFollowingInfo(m_Controller.m_PerpendicularPoint, m_Controller.m_FollowMePoint, points_markers);
 		pub_ControlInfoRviz.publish(points_markers);
-
-//		if(dt < 1.0/(double)freq)
-//		{
-//			std::cout << ">>>>>> very small dt : " << dt << std::endl;
-//		}
-//		else if(dt > (1.0/(double)freq) + 0.02)
-//		{
-//			std::cout << "<<<<<< very large dt : " << dt << std::endl;
-//		}
-//		else
-//		{
-//			std::cout << "======  dt : " << dt << std::endl;
-//		}
 
 		loop_rate.sleep();
 	}

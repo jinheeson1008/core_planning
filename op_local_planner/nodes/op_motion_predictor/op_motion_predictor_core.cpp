@@ -266,7 +266,7 @@ void MotionPrediction::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& ms
 void MotionPrediction::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
 {
 	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = msg->angle*DEG2RAD;
+	m_VehicleStatus.steer = -msg->angle*DEG2RAD;
 	m_CurrentPos.v = m_VehicleStatus.speed;
 	bVehicleStatus = true;
 //	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
@@ -293,12 +293,12 @@ void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedOb
 		globalObjects = *msg;
 	}
 
+//	std::cout << std::endl << "New : " << globalObjects.objects.size() << ", Old: " << m_TrackedObjects.size() << std::endl << std::endl;
 
 	m_TrackedObjects.clear();
 	bTrackedObjects = true;
 
 	PlannerHNS::DetectedObject obj;
-
 	for(unsigned int i = 0 ; i <globalObjects.objects.size(); i++)
 	{
 		if(globalObjects.objects.at(i).id > 0)
@@ -308,46 +308,44 @@ void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedOb
 		}
 	}
 
-	//if(bMap)
+	if(m_PredictBeh.m_bStepByStep && m_bGoNextStep)
 	{
-		if(m_PredictBeh.m_bStepByStep && m_bGoNextStep)
-		{
-			m_bGoNextStep = false;
-			m_PredictBeh.DoOneStep(m_TrackedObjects, m_CurrentPos, m_PlanningParams.minSpeed, m_CarInfo.max_deceleration,  m_Map);
-		}
-		else if(!m_PredictBeh.m_bStepByStep)
-		{
-			m_PredictBeh.DoOneStep(m_TrackedObjects, m_CurrentPos, m_PlanningParams.minSpeed, m_CarInfo.max_deceleration,  m_Map);
-		}
+		m_bGoNextStep = false;
+		m_PredictBeh.DoOneStep(m_TrackedObjects, m_CurrentPos, m_PlanningParams.minSpeed, m_CarInfo.max_deceleration,  m_Map);
+	}
+	else if(!m_PredictBeh.m_bStepByStep)
+	{
+		m_PredictBeh.DoOneStep(m_TrackedObjects, m_CurrentPos, m_PlanningParams.minSpeed, m_CarInfo.max_deceleration,  m_Map);
+	}
 
+	m_PredictedResultsResults.objects.clear();
+	autoware_msgs::DetectedObject pred_obj;
+	for(unsigned int i = 0 ; i <m_PredictBeh.m_ParticleInfo.size(); i++)
+	{
+		PlannerHNS::ROSHelpers::ConvertFromOpenPlannerDetectedObjectToAutowareDetectedObject(m_PredictBeh.m_ParticleInfo.at(i)->obj, false, pred_obj);
+		if(m_PredictBeh.m_ParticleInfo.at(i)->best_behavior_track)
+			pred_obj.behavior_state = m_PredictBeh.m_ParticleInfo.at(i)->best_behavior_track->best_beh_by_p;
+		m_PredictedResultsResults.objects.push_back(pred_obj);
+	}
 
-		m_PredictedResultsResults.objects.clear();
-		autoware_msgs::DetectedObject pred_obj;
-		for(unsigned int i = 0 ; i <m_PredictBeh.m_ParticleInfo.size(); i++)
+	if(m_bEnableCurbObstacles)
+	{
+		curr_curbs_obstacles.clear();
+		GenerateCurbsObstacles(curr_curbs_obstacles);
+		PlannerHNS::ROSHelpers::ConvertCurbsMarkers(curr_curbs_obstacles, m_CurbsActual, m_CurbsDummy);
+		pub_CurbsRviz.publish(m_CurbsActual);
+		//std::cout << "Curbs No: " << curr_curbs_obstacles.size() << endl;
+		for(unsigned int i = 0 ; i <curr_curbs_obstacles.size(); i++)
 		{
-			PlannerHNS::ROSHelpers::ConvertFromOpenPlannerDetectedObjectToAutowareDetectedObject(m_PredictBeh.m_ParticleInfo.at(i)->obj, false, pred_obj);
-			if(m_PredictBeh.m_ParticleInfo.at(i)->best_behavior_track)
-				pred_obj.behavior_state = m_PredictBeh.m_ParticleInfo.at(i)->best_behavior_track->best_beh_by_p;
+			PlannerHNS::ROSHelpers::ConvertFromOpenPlannerDetectedObjectToAutowareDetectedObject(curr_curbs_obstacles.at(i), false, pred_obj);
 			m_PredictedResultsResults.objects.push_back(pred_obj);
 		}
-
-		if(m_bEnableCurbObstacles)
-		{
-			curr_curbs_obstacles.clear();
-			GenerateCurbsObstacles(curr_curbs_obstacles);
-			PlannerHNS::ROSHelpers::ConvertCurbsMarkers(curr_curbs_obstacles, m_CurbsActual, m_CurbsDummy);
-			pub_CurbsRviz.publish(m_CurbsActual);
-			//std::cout << "Curbs No: " << curr_curbs_obstacles.size() << endl;
-			for(unsigned int i = 0 ; i <curr_curbs_obstacles.size(); i++)
-			{
-				PlannerHNS::ROSHelpers::ConvertFromOpenPlannerDetectedObjectToAutowareDetectedObject(curr_curbs_obstacles.at(i), false, pred_obj);
-				m_PredictedResultsResults.objects.push_back(pred_obj);
-			}
-		}
-
-		m_PredictedResultsResults.header.stamp = ros::Time().now();
-		pub_predicted_objects_trajectories.publish(m_PredictedResultsResults);
 	}
+
+	m_PredictedResultsResults.header.stamp = ros::Time().now();
+	pub_predicted_objects_trajectories.publish(m_PredictedResultsResults);
+
+	VisualizePrediction();
 }
 
 void MotionPrediction::GenerateCurbsObstacles(std::vector<PlannerHNS::DetectedObject>& curb_obstacles)
@@ -493,44 +491,13 @@ void MotionPrediction::VisualizePrediction()
 
 void MotionPrediction::MainLoop()
 {
-
-	ros::Rate loop_rate(25);
+	ros::Rate loop_rate(50);
 
 	while (ros::ok())
 	{
 		ros::spinOnce();
 
-		if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
-		{
-			bMap = true;
-			PlannerHNS::KmlMapLoader kml_loader;
-			kml_loader.LoadKML(m_MapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-		}
-		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
-		{
-			bMap = true;
-			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
-			vec_loader.LoadFromFile(m_MapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-		}
-		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
-		{
-			bMap = true;
-			PlannerHNS::Lanelet2MapLoader map_loader;
-			map_loader.LoadMap(m_MapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-		}
-		else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
-		{
-			if(m_MapRaw.AreMessagesReceived())
-			{
-				bMap = true;
-				PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
-				vec_loader.LoadFromData(m_MapRaw, m_Map);
-				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-			}
-		}
+		LoadMap();
 
 //		if(UtilityHNS::UtilityH::GetTimeDiffNow(m_VisualizationTimer) > m_VisualizationTime)
 //		{
@@ -551,6 +518,41 @@ void MotionPrediction::MainLoop()
 }
 
 //Mapping Section
+
+void MotionPrediction::LoadMap()
+{
+	if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
+	{
+		bMap = true;
+		PlannerHNS::KmlMapLoader kml_loader;
+		kml_loader.LoadKML(m_MapPath, m_Map);
+		PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+	}
+	else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
+	{
+		bMap = true;
+		PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
+		vec_loader.LoadFromFile(m_MapPath, m_Map);
+		PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+	}
+	else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
+	{
+		bMap = true;
+		PlannerHNS::Lanelet2MapLoader map_loader;
+		map_loader.LoadMap(m_MapPath, m_Map);
+		PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+	}
+	else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
+	{
+		if(m_MapRaw.AreMessagesReceived())
+		{
+			bMap = true;
+			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
+			vec_loader.LoadFromData(m_MapRaw, m_Map);
+			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
+		}
+	}
+}
 
 void MotionPrediction::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
 {

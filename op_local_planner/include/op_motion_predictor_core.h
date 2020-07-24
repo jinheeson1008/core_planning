@@ -163,6 +163,7 @@ public:
 	ros::Subscriber sub_nodes;
 
 
+	void LoadMap();
 	void callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg);
 	void callbackGetVMLanes(const vector_map_msgs::LaneArray& msg);
 	void callbackGetVMPoints(const vector_map_msgs::PointArray& msg);

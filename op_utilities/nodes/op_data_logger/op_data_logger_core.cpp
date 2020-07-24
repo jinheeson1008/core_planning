@@ -59,7 +59,7 @@ OpenPlannerDataLogger::OpenPlannerDataLogger()
 	//----------------------------
 	if(m_bPredictionLog)
 	{
-		sub_predicted_objects = nh.subscribe("/predicted_objects", 1, &OpenPlannerDataLogger::callbackGetPredictedObjects, this);
+		sub_predicted_objects = nh.subscribe("/detection/contour_tracker/objects", 1, &OpenPlannerDataLogger::callbackGetPredictedObjects, this);
 	}
 	//----------------------------
 
@@ -126,9 +126,9 @@ OpenPlannerDataLogger::~OpenPlannerDataLogger()
 			ostringstream car_name;
 			car_name << "sim_car_no_" << i+1;
 			car_name << "_";
-			UtilityHNS::DataRW::WriteLogData(fileName.str()+UtilityHNS::DataRW::PredictionFolderName,
+			UtilityHNS::DataRW::WriteLogData(fileName.str()+UtilityHNS::DataRW::SimulationFolderName,
 					car_name.str(),
-					"time_diff,distance_diff, heading_diff, velocity_diff, rms, state_diff," , m_SimulationLogData.at(i));
+					"time_diff,distance_diff, heading_diff, velocity_diff, rms, state_diff, actual_v, kalman_v," , m_SimulationLogData.at(i));
 		}
 	}
 
@@ -234,7 +234,7 @@ void OpenPlannerDataLogger::UpdatePlanningParams(ros::NodeHandle& _nh)
 	}
 
 	_nh.getParam("/op_data_logger/lightsAndSignsLog", m_bLightAndSignsLog);
-	_nh.getParam("/op_data_logger/trackingLog", m_bPredictionLog);
+	_nh.getParam("/op_data_logger/predictionLog", m_bPredictionLog);
 	_nh.getParam("/op_data_logger/controlLog", m_bControlLog);
 	_nh.getParam("/op_data_logger/simulatedCars", m_bSimulatedCars);
 }
@@ -627,7 +627,7 @@ void OpenPlannerDataLogger::MainLoop()
 {
 	timespec planningTimer;
 	UtilityHNS::UtilityH::GetTickCount(planningTimer);
-	ros::Rate loop_rate(50);
+	ros::Rate loop_rate(20);
 	while (ros::ok())
 	{
 		ros::spinOnce();
@@ -664,7 +664,7 @@ void OpenPlannerDataLogger::MainLoop()
 			ros::Time t;
 			for(unsigned int i=0; i < m_SimulatedVehicle.size(); i++)
 			{
-				if(m_SimulatedVehicle.at(i).pose_time != t && m_SimulatedVehicle.at(i).path_time != t)
+				//if(m_SimulatedVehicle.at(i).pose_time != t && m_SimulatedVehicle.at(i).path_time != t)
 				{
 					for(unsigned int j = 0; j < m_PredictedObjects.size(); j++)
 					{
@@ -802,7 +802,7 @@ void OpenPlannerDataLogger::CompareAndLog(VehicleDataContainer& ground_truth, Pl
 
 	double t_diff = fabs(ground_truth.path_time.toSec() - m_pred_time.toSec());
 	double d_diff = hypot(ground_truth.pose.pos.y - predicted.center.pos.y, ground_truth.pose.pos.x - predicted.center.pos.x);
-	double o_diff = UtilityHNS::UtilityH::AngleBetweenTwoAnglesPositive(ground_truth.pose.pos.a, predicted.center.pos.a);
+	double a_diff = UtilityHNS::UtilityH::AngleBetweenTwoAnglesPositive(ground_truth.pose.pos.a, predicted.center.pos.a);
 	double v_diff = fabs(ground_truth.pose.v - predicted.center.v);
 	double rms = -1;
 	int beh_state_diff = -1;
@@ -820,8 +820,9 @@ void OpenPlannerDataLogger::CompareAndLog(VehicleDataContainer& ground_truth, Pl
 	beh_state_diff = predicted.behavior_state;
 
 
+	//"time_diff,distance_diff, heading_diff, velocity_diff, rms, state_diff, actual_v, kalman_v,"
 	std::ostringstream dataLine;
-	dataLine << t_diff << "," << d_diff << "," <<  o_diff << "," << v_diff << "," << rms << "," << beh_state_diff << ",";
+	dataLine << t_diff << "," << d_diff << "," <<  a_diff << "," << v_diff << "," << rms << "," << beh_state_diff << "," << ground_truth.pose.v << "," << predicted.center.v << ",";
 	m_SimulationLogData.at(ground_truth.id -1).push_back(dataLine.str());
 
 	//std::cout << "Predicted Behavior: " << predicted.behavior_state << std::endl;

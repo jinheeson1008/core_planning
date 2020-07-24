@@ -51,12 +51,14 @@ public:
 	int 	nSimuObjs;
 	double 	errFactor;
 	double  nPointsPerObj;
+	bool bUseNavGoal;
 
 	DetectionCommandParams()
 	{
 		nSimuObjs = 3;
 		errFactor = 0;
 		nPointsPerObj = 50;
+		bUseNavGoal = false;
 	}
 };
 

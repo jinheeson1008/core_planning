@@ -1,10 +1,10 @@
 <!-- -->
 <launch>		
-	<arg name="experimentName" 			default="Tartu" />	
-	<arg name="lightsAndSignsLog" 		default="true" />	
-	<arg name="predictionLog"			default="false" />
-	<arg name="controlLog"				default="true" />
-	<arg name="simulatedCars"			default="false" />
+	<arg name="experimentName" 			default="carla_calibration" />	
+	<arg name="lightsAndSignsLog" 		default="false" />	
+	<arg name="predictionLog"			default="true" />
+	<arg name="controlLog"				default="false" />
+	<arg name="simulatedCars"			default="true" />
 		
 	<node pkg="op_utilities" type="op_data_logger" name="op_data_logger" output="screen">
 						
