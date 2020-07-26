@@ -298,7 +298,7 @@ void MotionController::MainLoop()
 			dt_list.erase(dt_list.begin()+0);
 		}
 
-		if(m_bVelocityCalibrate)
+		if(m_bVelocityCalibrate && m_FollowingTrajectory.size() > 0)
 		{
 			if(m_TargetTestSpeeds.size() > 0)
 			{
