@@ -307,8 +307,8 @@ void MotionController::MainLoop()
 				if((m_TargetTestSpeeds.front().second > m_TargetTestSpeeds.front().first && m_VehicleStatus.speed >= m_TargetTestSpeeds.front().second) ||
 						(m_TargetTestSpeeds.front().second < m_TargetTestSpeeds.front().first && m_VehicleStatus.speed <= m_TargetTestSpeeds.front().second))
 				{
+					m_Controller.ResetLogTime(m_VehicleStatus.speed,m_TargetTestSpeeds.front().first);
 					m_TargetTestSpeeds.erase(m_TargetTestSpeeds.begin()+0);
-					m_Controller.ResetLogTime(0,0);
 				}
 			}
 			else
