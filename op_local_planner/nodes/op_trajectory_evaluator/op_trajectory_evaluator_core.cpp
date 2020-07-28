@@ -307,7 +307,7 @@ void TrajectoryEvalCore::callbackGetLocalPlannerPath(const autoware_msgs::LaneAr
 			int roll_out_gid = -1;
 			if(path.size() > 0)
 			{
-				roll_out_gid = path.at(i).gid;
+				roll_out_gid = path.at(0).gid;
 			}
 
 			if(std::find(globalPathsId_roll_outs.begin(), globalPathsId_roll_outs.end(), roll_out_gid) == globalPathsId_roll_outs.end())
