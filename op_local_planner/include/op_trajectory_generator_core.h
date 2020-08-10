@@ -49,6 +49,7 @@ protected:
 
 	PlannerHNS::VehicleState m_VehicleStatus;
 	bool bVehicleStatus;
+	bool bFrontAxelStart;
 
 	std::vector<PlannerHNS::WayPoint> m_temp_path;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPaths;

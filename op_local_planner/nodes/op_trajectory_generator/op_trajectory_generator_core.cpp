@@ -29,6 +29,7 @@ TrajectoryGen::TrajectoryGen()
 	bWayGlobalPath = false;
 	bEnableSmoothGlobalPathForCARLA = false;
 	bEnableVisualizeGlobalPathForCARLA = false;
+	bFrontAxelStart = false;
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
@@ -86,6 +87,7 @@ void TrajectoryGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_trajectory_generator/samplingOutMargin", m_PlanningParams.rollInMargin);
 	_nh.getParam("/op_trajectory_generator/samplingSpeedFactor", m_PlanningParams.rollInSpeedFactor);
 	_nh.getParam("/op_trajectory_generator/enableHeadingSmoothing", m_PlanningParams.enableHeadingSmoothing);
+	_nh.getParam("/op_trajectory_generator/startFromFrontAxel", bFrontAxelStart);
 
 	_nh.getParam("/op_common_params/enableSwerving", m_PlanningParams.enableSwerving);
 	if(m_PlanningParams.enableSwerving)
@@ -329,11 +331,18 @@ void TrajectoryGen::MainLoop()
 		{
 			m_GlobalPathSections.clear();
 
+			PlannerHNS::WayPoint start_point = m_CurrentPos;
+			if(bFrontAxelStart)
+			{
+				start_point.pos.x += m_CarInfo.wheel_base*cos(start_point.pos.a);
+				start_point.pos.y += m_CarInfo.wheel_base*sin(start_point.pos.a);
+			}
+
 			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
 			{
 				t_centerTrajectorySmoothed.clear();
 
-				m_prev_index.at(i) = PlannerHNS::PlanningHelpers::ExtractPartFromPointToDistanceDirectionFast(m_GlobalPaths.at(i), m_CurrentPos, m_PlanningParams.horizonDistance ,
+				m_prev_index.at(i) = PlannerHNS::PlanningHelpers::ExtractPartFromPointToDistanceDirectionFast(m_GlobalPaths.at(i), start_point, m_PlanningParams.horizonDistance ,
 						m_PlanningParams.pathDensity ,t_centerTrajectorySmoothed, m_prev_index.at(i));
 
 				if(m_prev_index.at(i) > 0 ) m_prev_index.at(i) = m_prev_index.at(i) -1;
@@ -342,7 +351,7 @@ void TrajectoryGen::MainLoop()
 			}
 
 			std::vector<PlannerHNS::WayPoint> sampledPoints_debug;
-			m_Planner.GenerateRunoffTrajectory(m_GlobalPathSections, m_CurrentPos,
+			m_Planner.GenerateRunoffTrajectory(m_GlobalPathSections, start_point,
 								m_PlanningParams.enableLaneChange,
 								m_VehicleStatus.speed,
 								m_PlanningParams.microPlanDistance,
@@ -368,7 +377,7 @@ void TrajectoryGen::MainLoop()
 				for(unsigned int j=0; j < m_RollOuts.at(i).size(); j++)
 				{
 					autoware_msgs::Lane lane;
-					PlannerHNS::PlanningHelpers::PredictConstantTimeCostForTrajectory(m_RollOuts.at(i).at(j), m_CurrentPos, m_PlanningParams.minSpeed, m_PlanningParams.microPlanDistance);
+					PlannerHNS::PlanningHelpers::PredictConstantTimeCostForTrajectory(m_RollOuts.at(i).at(j), start_point, m_PlanningParams.minSpeed, m_PlanningParams.microPlanDistance);
 					PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_RollOuts.at(i).at(j), lane);
 					lane.closest_object_distance = 0;
 					lane.closest_object_velocity = 0;
