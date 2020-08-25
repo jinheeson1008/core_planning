@@ -54,8 +54,8 @@
 	<arg name="enableStepByStepSignal" 		default="false" />
 	<arg name="enableSimulatedVelodyne" 	default="false" />  
 	
-	<arg name="mapSource" 					default="2" /> <!-- Autoware=0, Vector Map Folder=1, kml=2, lanelet2=3 -->
-	<arg name="mapFileName" 				default="/home/hatem/carla_simulator/KmlMaps/Town01.kml" />
+	<arg name="mapSource" 					default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml=2, lanelet2=3 -->
+	<arg name="mapFileName" 				default="" />
 	<arg name="lanelet2_origin"				default="0,0,0" /> <!-- GPS origin for lanelet2 map files, Lat, Long, Alt  --> 
 	
 	<arg name="enableUsingJoyStick" 	default="false" /> 
