@@ -26,6 +26,7 @@ namespace BehaviorGeneratorNS
 
 BehaviorGen::BehaviorGen()
 {
+	m_ControlFrequency = 50;
 	bNewCurrentPos = false;
 	bVehicleStatus = false;
 	bWayGlobalPath = false;
@@ -759,8 +760,9 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 
 void BehaviorGen::MainLoop()
 {
-	ros::Rate loop_rate(50);
-
+	ros::Rate loop_rate(m_ControlFrequency);
+	double dt = 1.0/(double)m_ControlFrequency;
+	double avg_dt = dt;
 
 	timespec planningTimer;
 	UtilityHNS::UtilityH::GetTickCount(planningTimer);
@@ -768,8 +770,20 @@ void BehaviorGen::MainLoop()
 	while (ros::ok())
 	{
 
-		double dt  = UtilityHNS::UtilityH::GetTimeDiffNow(planningTimer);
+		dt  = UtilityHNS::UtilityH::GetTimeDiffNow(planningTimer);
 		UtilityHNS::UtilityH::GetTickCount(planningTimer);
+
+		dt_list.push_back(dt);
+		if(dt_list.size() > m_ControlFrequency)
+		{
+			double dt_sum = 0;
+			for(auto& step_dt: dt_list)
+			{
+				dt_sum += step_dt;
+			}
+			avg_dt = dt_sum / dt_list.size();
+			dt_list.erase(dt_list.begin()+0);
+		}
 
 		ros::spinOnce();
 
@@ -817,7 +831,7 @@ void BehaviorGen::MainLoop()
 			m_BehaviorGenerator.UpdateAvoidanceParams(m_PlanningParams.enableSwerving, m_PlanningParams.rollOutNumber);
 #endif
 
-			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
+			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(avg_dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
 			//if(!m_bRequestNewPlanDone && m_BehaviorGenerator.m_bRequestNewGlobalPlan)
 			if(m_BehaviorGenerator.m_bRequestNewGlobalPlan)

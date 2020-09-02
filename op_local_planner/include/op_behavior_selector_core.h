@@ -63,6 +63,10 @@ class BehaviorGen
 {
 protected: //Planning Related variables
 
+	//Control Related
+	int m_ControlFrequency;
+	std::vector<double> dt_list;
+
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::WayPoint m_CurrentPos;
 	bool bNewCurrentPos;
