@@ -137,8 +137,8 @@ BehaviorGen::~BehaviorGen()
 		fileName << UtilityHNS::UtilityH::GetHomeDirectory()+UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_ExperimentFolderName + UtilityHNS::DataRW::StatesLogFolderName;
 
 	UtilityHNS::DataRW::WriteLogData(fileName.str(), "MainLog",
-				"time,dt, Behavior_i, Behavior_str, RollOuts_n, Blocked_i, Central_i, Selected_i, StopSign_id, Light_id, Stop_Dist, Follow_Dist, Follow_Vel,"
-				"Target_Vel, PID_Vel, T_cmd_Vel, C_cmd_Vel, Vel, Steer, X, Y, Z, Theta, Goal_Dist,d_goal_min_stop_d,"
+				"time,dt, Behavior_i, Behavior_str, RollOuts_n, Blocked_i, Central_i, Selected_i, StopSign_id, Light_id, minStopDist, Follow_Dist, Follow_Vel,"
+				"Max_Vel, Target_Vel, PID_Vel, T_cmd_Vel, C_cmd_Vel, Vel, Steer, X, Y, Z, Theta, Goal_Dist, Stop_Dist,"
 				, m_LogData);
 #endif
 }
@@ -186,11 +186,19 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
 	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
 
-	PlannerHNS::ControllerParams controlParams;
-	controlParams.Steering_Gain = PlannerHNS::PID_CONST(0.07, 0.02, 0.01);
-	controlParams.Velocity_Gain = PlannerHNS::PID_CONST(0.1, 0.005, 0.1);
-	nh.getParam("/op_common_params/steeringDelay", controlParams.SteeringDelay);
-	nh.getParam("/op_common_params/minPursuiteDistance", controlParams.minPursuiteDistance );
+
+	m_ControlParams.Steering_Gain = PlannerHNS::PID_CONST(0.07, 0.02, 0.01);
+	m_ControlParams.Velocity_Gain = PlannerHNS::PID_CONST(0.1, 0.005, 0.1);
+	m_ControlParams.min_safe_follow_distance = m_PlanningParams.maxDistanceToAvoid;
+	nh.getParam("/op_common_params/steeringDelay", m_ControlParams.SteeringDelay);
+	nh.getParam("/op_common_params/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
+
+	//Internal ACC parameters
+	nh.getParam("/op_common_params/use_internal_acc", m_BehaviorGenerator.m_bUseInternalACC);
+	nh.getParam("/op_common_params/accelerationPushRatio", m_ControlParams.accelPushRatio);
+	nh.getParam("/op_common_params/brakingPushRatio", m_ControlParams.brakePushRatio);
+	nh.getParam("/op_common_params/curveSlowDownRatio", m_ControlParams.curveSlowDownRatio);
+
 	nh.getParam("/op_common_params/additionalBrakingDistance", m_PlanningParams.additionalBrakingDistance );
 	nh.getParam("/op_common_params/goalDiscoveryDistance", m_PlanningParams.goalDiscoveryDistance);
 	nh.getParam("/op_common_params/giveUpDistance", m_PlanningParams.giveUpDistance );
@@ -236,7 +244,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	//std::cout << "nReliableCount: " << m_PlanningParams.nReliableCount << std::endl;
 
-	m_BehaviorGenerator.Init(controlParams, m_PlanningParams, m_CarInfo);
+	m_BehaviorGenerator.Init(m_ControlParams, m_PlanningParams, m_CarInfo);
 	m_BehaviorGenerator.m_pCurrentBehaviorState->m_Behavior = PlannerHNS::INITIAL_STATE;
 
 }
@@ -380,6 +388,14 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
 				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
 				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.35, 0.4, 0.05);
+				double temp_max_speed = 0;
+				for(auto& p: m_GlobalPaths.at(i))
+				{
+					if(p.v > temp_max_speed)
+					{
+						temp_max_speed = p.v;
+					}
+				}
 				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
 #ifdef LOG_LOCAL_PLANNING_DATA
 				std::ostringstream str_out;
@@ -641,6 +657,7 @@ void BehaviorGen::VisualizeLocalPlanner()
 void BehaviorGen::SendLocalPlanningTopics()
 {
 	//Send Behavior State
+
 	autoware_msgs::Waypoint wp_state = PlannerHNS::ROSHelpers::ConvertBehaviorStateToAutowareWaypoint(m_CurrentBehavior);
 	pub_BehaviorState.publish(wp_state);
 
@@ -715,6 +732,12 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 	}
 #endif
 
+	double target_vel = 0;
+	if(m_BehaviorGenerator.m_Path.size() > 0)
+	{
+		target_vel = m_BehaviorGenerator.m_Path.at(0).v;
+	}
+
 	timespec log_t;
 	UtilityHNS::UtilityH::GetTickCount(log_t);
 	std::ostringstream dataLine;
@@ -730,6 +753,7 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToNext << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->velocityOfNext << "," <<
 			m_CurrentBehavior.maxVelocity << "," <<
+			target_vel << "," <<
 			m_Twist_raw.twist.linear.x << "," <<
 			m_Twist_cmd.twist.linear.x << "," <<
 			m_Ctrl_cmd.linear_velocity << "," <<
@@ -737,7 +761,7 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 			m_VehicleStatus.steer << "," <<
 			m_BehaviorGenerator.state.pos.x << "," << m_BehaviorGenerator.state.pos.y << "," << m_BehaviorGenerator.state.pos.z << "," << UtilityHNS::UtilityH::SplitPositiveAngle(m_BehaviorGenerator.state.pos.a)+M_PI << "," <<
 			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToGoal << "," <<
-			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToGoal - m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->minStoppingDistance << ",";
+			m_BehaviorGenerator.m_pCurrentBehaviorState->GetCalcParams()->distanceToStop() << ",";
 
 	if(m_LogData.size() < 150000 && m_CurrentBehavior.state != PlannerHNS::INITIAL_STATE) //in case I forget to turn off this node .. could fill the hard drive
 	{

@@ -100,6 +100,7 @@ protected: //Planning Related variables
 
   	PlannerHNS::PlanningParams m_PlanningParams;
   	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
+  	PlannerHNS::ControllerParams m_ControlParams;
 
   	autoware_msgs::Lane m_CurrentTrajectoryToSend;
   	bool bNewLightStatus;

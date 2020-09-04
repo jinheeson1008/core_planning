@@ -17,8 +17,8 @@
 	<arg name="maxDistanceToAvoid" 			default="5.0"  /> <!-- should be smaller than minDistanceToAvoid -->
 	<arg name="speedProfileFactor"			default="0.8"  />
 	
-	<arg name="smoothingDataWeight"			default="0.4"  />
-	<arg name="smoothingSmoothWeight"		default="0.45"  />	
+	<arg name="smoothingDataWeight"			default="0.45"  />
+	<arg name="smoothingSmoothWeight"		default="0.4"  />	
 	
 	<arg name="horizontalSafetyDistance"	default="1.2"  />
 	<arg name="verticalSafetyDistance"		default="0.8"  />
@@ -37,10 +37,15 @@
 	<arg name="maxWheelAngle" 				default="0.45" /> <!-- radians -->
 	<arg name="steeringDelay" 				default="1.2" /> <!-- time steering wheel take to turn from zero to max left or right -->
 	<arg name="minPursuiteDistance" 		default="3.0" /> <!-- min distance to forward following target point on the trajectory  -->
-	<arg name="maxAcceleration" 			default="3.0" /> <!-- m/s*s -->
-	<arg name="maxDeceleration" 			default="-3.0" /> <!-- m/s*s -->
-	<arg name="maxVelocity" 				default="6.0" /> <!-- m/s -->
+	<arg name="maxAcceleration" 			default="2.0" /> <!-- m/s*s -->
+	<arg name="maxDeceleration" 			default="-2.0" /> <!-- m/s*s -->
+	<arg name="maxVelocity" 				default="10.0" /> <!-- m/s -->
 	<arg name="minVelocity" 				default="0.1" /> <!-- m/s -->
+	<!-- Internal ACC parameters -->
+	<arg name="use_internal_acc" 			default="false" />
+	<arg name="accelerationPushRatio" 		default="1.5" />
+	<arg name="brakingPushRatio" 			default="3.4" />
+	<arg name="curveSlowDownRatio" 			default="0.5" />	
 	<!-- ................................................... -->
 	
 	<arg name="additionalBrakingDistance" 	default="1.0"  />
@@ -54,7 +59,7 @@
 	<arg name="vel_can_topic"				default="/can_info" />
 	<arg name="vehicle_status_topic"		default="/vehicle_status" />
 			
-	<arg name="experimentName" 				default="" />		
+	<arg name="experimentName" 				default="decision_maker" />		
 	
 	<arg name="objects_input_topic" 		default="/detection/contour_tracker/objects" />
 
@@ -94,6 +99,10 @@
 		<param name="maxDeceleration" 			value="$(arg maxDeceleration)" />
 		<param name="maxVelocity" 				value="$(arg maxVelocity)" />
 		<param name="minVelocity" 				value="$(arg minVelocity)" />
+		<param name="use_internal_acc" 			value="$(arg use_internal_acc)" />
+		<param name="accelerationPushRatio" 	value="$(arg accelerationPushRatio)" />
+		<param name="brakingPushRatio" 			value="$(arg brakingPushRatio)" />
+		<param name="curveSlowDownRatio" 		value="$(arg curveSlowDownRatio)" />
 			
 		<param name="additionalBrakingDistance" value="$(arg additionalBrakingDistance)"  />
 		<param name="goalDiscoveryDistance" 	value="$(arg goalDiscoveryDistance)"  />
