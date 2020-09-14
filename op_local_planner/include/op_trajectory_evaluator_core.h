@@ -30,6 +30,7 @@
 #include <autoware_msgs/VehicleStatus.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/Int32.h>
+#include <std_msgs/Int32MultiArray.h>
 
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/TrajectoryEvaluator.h"
@@ -54,17 +55,14 @@ protected:
 	bool m_bKeepCurrentIfPossible;
 
 	std::vector<PlannerHNS::WayPoint> m_temp_path;
+	std::vector<int> m_CurrGlobalPathsIds;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPaths;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPathsToUse;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPathSections;
 	std::vector<int> m_prev_index;
 	std::vector<PlannerHNS::WayPoint> t_centerTrajectorySmoothed;
-	bool bWayGlobalPath;
-	bool bWayGlobalPathToUse;
 	bool bEnableSmoothGlobalPathForCARLA;
-	std::vector<std::vector<PlannerHNS::WayPoint> > m_GeneratedRollOuts;
-	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOuts;
-	bool bRollOuts;
+	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOutsToUse;
 
 	std::vector<PlannerHNS::DetectedObject> m_PredictedObjects;
 	bool bPredictedObjects;
@@ -79,7 +77,6 @@ protected:
   	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
 
   	PlannerHNS::BehaviorState m_CurrentBehavior;
-  	bool bNewBehaviorState;
   	double m_AdditionalFollowDistance;
 
 
@@ -108,10 +105,7 @@ protected:
 	ros::Subscriber sub_GlobalPlannerPaths;
 	ros::Subscriber sub_LocalPlannerPaths;
 	ros::Subscriber sub_predicted_objects;
-	ros::Subscriber sub_current_trajectory_index;
-	ros::Subscriber sub_current_lane_index;
-	ros::Subscriber sub_behavior_state;
-
+	ros::Subscriber sub_CurrGlobalLocalPathsIds;
 
 
 	// Callback function for subscriber.
@@ -123,16 +117,15 @@ protected:
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetPredictedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg);
-//	void callbackGetTrajectoryIndex(const std_msgs::Int32ConstPtr& msg);
-//	void callbackGetLaneIndex(const std_msgs::Int32ConstPtr& msg);
-	void callbackGetBehaviorState(const autoware_msgs::WaypointConstPtr& msg);
+	void callbackGetTrajectoryInforFromBehaviorSelector(const std_msgs::Int32MultiArrayConstPtr& msg);
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);
   //int GetGlobalPathIndex(const int& iCurrTrajectory);
-  void CollectRollOutsByGlobalPath();
+  void CollectRollOutsByGlobalPath(std::vector< std::vector<PlannerHNS::WayPoint> >& local_rollouts);
   void BalanceFactorsToOne(double& priority, double& transition, double& longi, double& lateral, double& change);
   bool FindBestLane(std::vector<PlannerHNS::TrajectoryCost> tcs, PlannerHNS::TrajectoryCost& best_l);
+  bool CompareTrajectoriesWithIds(std::vector<std::vector<PlannerHNS::WayPoint> >& paths, std::vector<int>& local_ids);
 
 public:
   TrajectoryEvalCore();

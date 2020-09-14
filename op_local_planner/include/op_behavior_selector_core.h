@@ -37,6 +37,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <nav_msgs/Odometry.h>
 #include <autoware_msgs/LaneArray.h>
+#include <std_msgs/Int32MultiArray.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Bool.h>
@@ -77,11 +78,7 @@ protected: //Planning Related variables
 	std::vector<PlannerHNS::WayPoint> m_temp_path;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPaths;
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPathsToUse;
-	bool bWayGlobalPath;
-	bool bWayGlobalPathLogs;
-	std::vector<std::vector<PlannerHNS::WayPoint> > m_RollOuts;
-	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOuts;
-	bool bRollOuts;
+	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOutsToUse;
 
 	PlannerHNS::MAP_SOURCE_TYPE m_MapType;
 	std::string m_MapPath;
@@ -129,8 +126,7 @@ protected: //Planning Related variables
 	ros::Publisher pub_TargetSpeedRviz;
 	ros::Publisher pub_ActualSpeedRviz;
 	ros::Publisher pub_DetectedLight;
-	ros::Publisher pub_CurrTrajectoryIndex;
-	ros::Publisher pub_CurrLaneIndex;
+	ros::Publisher pub_CurrGlobalLocalPathsIds;
 	ros::Publisher pub_RequestReplan;
 	ros::Publisher pub_BehaviorStateRviz;
 
@@ -167,7 +163,8 @@ protected: //Planning Related variables
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 	void callbackGetLocalTrajectoryCost(const autoware_msgs::LaneConstPtr& msg);
-	void CollectRollOutsByGlobalPath();
+	void CollectRollOutsByGlobalPath(std::vector< std::vector<PlannerHNS::WayPoint> >& local_rollouts);
+	bool CompareTrajectoriesWithIds(std::vector<std::vector<PlannerHNS::WayPoint> >& paths, std::vector<int>& local_ids);
 	//----------------------------
 
 	//Traffic Information Section

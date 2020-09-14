@@ -29,13 +29,10 @@ BehaviorGen::BehaviorGen()
 	m_ControlFrequency = 50;
 	bNewCurrentPos = false;
 	bVehicleStatus = false;
-	bWayGlobalPath = false;
-	bWayGlobalPathLogs = false;
 	bNewLightStatus = false;
 	bNewLightSignal = false;
 	bBestCost = false;
 	bMap = false;
-	bRollOuts = false;
 	m_bRequestNewPlanSent = false;
 
 	ros::NodeHandle _nh;
@@ -60,8 +57,7 @@ BehaviorGen::BehaviorGen()
 	pub_TargetSpeedRviz = nh.advertise<std_msgs::Float32>("op_target_velocity_rviz", 1);
 	pub_ActualSpeedRviz = nh.advertise<std_msgs::Float32>("op_actual_velocity_rviz", 1);
 	pub_DetectedLight = nh.advertise<autoware_msgs::ExtractedPosition>("op_detected_light", 1);
-	pub_CurrTrajectoryIndex = nh.advertise<std_msgs::Int32>("op_curr_trajectory_index", 1);
-	pub_CurrLaneIndex = nh.advertise<std_msgs::Int32>("op_curr_lane_index", 1);
+	pub_CurrGlobalLocalPathsIds = nh.advertise<std_msgs::Int32MultiArray>("op_curr_global_local_ids", 1);
 	pub_RequestReplan = nh.advertise<std_msgs::Bool>("op_global_replan", 1);
 
 	//Path Planning Section
@@ -358,8 +354,6 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 					}
 					else
 						m_temp_path.at(j).pLane = pLane;
-
-					//std::cout << "StopLineInGlobalPath: " << m_temp_path.at(j).stopLineID << std::endl;
 				}
 			}
 
@@ -381,22 +375,14 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 
 		if(!bOldGlobalPath)
 		{
-			bWayGlobalPath = true;
-			bWayGlobalPathLogs = true;
+			//bWayGlobalPathLogs = true;
 			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
 			{
 				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
+				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.4, 0.4, 0.05);
 				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
-				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.35, 0.4, 0.05);
-				double temp_max_speed = 0;
-				for(auto& p: m_GlobalPaths.at(i))
-				{
-					if(p.v > temp_max_speed)
-					{
-						temp_max_speed = p.v;
-					}
-				}
 				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
+
 #ifdef LOG_LOCAL_PLANNING_DATA
 				std::ostringstream str_out;
 				str_out << UtilityHNS::UtilityH::GetHomeDirectory();
@@ -415,10 +401,6 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 
 			std::cout << "Received New Global Path Selector! " << std::endl;
 		}
-//		else
-//		{
-//			m_GlobalPaths.clear();
-//		}
 	}
 }
 
@@ -437,14 +419,16 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayCons
 {
 	if(msg->lanes.size() > 0)
 	{
-		m_RollOuts.clear();
+		//m_RollOuts.clear();
+		std::vector< std::vector<PlannerHNS::WayPoint> > received_local_rollouts;
 		std::vector<int> globalPathsId_roll_outs;
 
 		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
 		{
 			std::vector<PlannerHNS::WayPoint> path;
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), path);
-			m_RollOuts.push_back(path);
+			received_local_rollouts.push_back(path);
+			//m_RollOuts.push_back(path);
 
 			int roll_out_gid = -1;
 			if(path.size() > 0)
@@ -456,6 +440,29 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayCons
 			{
 				globalPathsId_roll_outs.push_back(roll_out_gid);
 			}
+		}
+
+		if(CompareTrajectoriesWithIds(m_GlobalPathsToUse, globalPathsId_roll_outs) == true)
+		{
+			CollectRollOutsByGlobalPath(received_local_rollouts);
+			m_BehaviorGenerator.m_LanesRollOuts = m_LanesRollOutsToUse;
+		}
+		else if(CompareTrajectoriesWithIds(m_GlobalPaths, globalPathsId_roll_outs) == true)
+		{
+			m_GlobalPathsToUse.clear();
+			for(auto& path: m_GlobalPaths)
+			{
+				m_GlobalPathsToUse.push_back(path);
+			}
+			CollectRollOutsByGlobalPath(received_local_rollouts);
+
+			m_BehaviorGenerator.SetNewGlobalPath(m_GlobalPathsToUse);
+			m_BehaviorGenerator.m_LanesRollOuts = m_LanesRollOutsToUse;
+		}
+		else
+		{
+			m_LanesRollOutsToUse.clear();
+			m_GlobalPathsToUse.clear();
 		}
 
 		// For CARLA challenge
@@ -472,47 +479,12 @@ void BehaviorGen::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayCons
 		}
 #endif
 
-		if(globalPathsId_roll_outs.size() != m_GlobalPathsToUse.size())
-		{
-			std::cout << "Warning From Behavior Selector, paths size mismatch, GlobalPaths: " << m_GlobalPathsToUse.size() << ", LocalPaths: " << globalPathsId_roll_outs.size() << std::endl;
-			bWayGlobalPath = true;
-		}
-
-		if(bWayGlobalPath)
-		{
-			m_GlobalPathsToUse.clear();
-			for(unsigned int i=0; i < globalPathsId_roll_outs.size(); i++)
-			{
-				for(unsigned int j=0; j < m_GlobalPaths.size(); j++)
-				{
-					if(m_GlobalPaths.at(j).size() > 0)
-					{
-						std::cout << "Before Synchronization At Behavior Selector: GlobalID: " <<  m_GlobalPaths.at(j).at(0).gid << ", LocalID: " << globalPathsId_roll_outs.at(i) << std::endl;
-
-						if(m_GlobalPaths.at(j).at(0).gid == globalPathsId_roll_outs.at(i))
-						{
-							bWayGlobalPath = false;
-							m_GlobalPathsToUse.push_back(m_GlobalPaths.at(j));
-							std::cout << "Synchronization At Behavior Selector: GlobalID: " <<  m_GlobalPaths.at(j).at(0).gid << ", LocalID: " << globalPathsId_roll_outs.at(i) << std::endl;
-							break;
-						}
-					}
-				}
-			}
-			m_BehaviorGenerator.SetNewGlobalPath(m_GlobalPathsToUse);
-			//m_bRequestNewPlanDone = false;
-		}
-
-		//m_BehaviorGenerator.m_RollOuts = m_RollOuts;
-		CollectRollOutsByGlobalPath();
-		m_BehaviorGenerator.m_LanesRollOuts = m_LanesRollOuts;
-		bRollOuts = true;
 	}
 }
 
-void BehaviorGen::CollectRollOutsByGlobalPath()
+void BehaviorGen::CollectRollOutsByGlobalPath(std::vector< std::vector<PlannerHNS::WayPoint> >& local_rollouts)
 {
-	m_LanesRollOuts.clear();
+	m_LanesRollOutsToUse.clear();
 	std::vector< std::vector<PlannerHNS::WayPoint> > local_category;
 //	std::cout << "Collecting Rollouts: ------------------ " << std::endl;
 	for(auto& g_path: m_GlobalPathsToUse)
@@ -520,7 +492,7 @@ void BehaviorGen::CollectRollOutsByGlobalPath()
 		if(g_path.size() > 0)
 		{
 			local_category.clear();
-			for(auto& l_traj: m_RollOuts)
+			for(auto& l_traj: local_rollouts)
 			{
 				if(l_traj.size() > 0 && l_traj.at(0).gid == g_path.at(0).gid)
 				{
@@ -528,10 +500,54 @@ void BehaviorGen::CollectRollOutsByGlobalPath()
 	//				std::cout << "Global Lane ID: " << g_path.at(0).gid << ", Cost Global: " << g_path.at(0).laneChangeCost << ", Cost Local: " << l_traj.at(0).laneChangeCost << std::endl;
 				}
 			}
-			m_LanesRollOuts.push_back(local_category);
+			m_LanesRollOutsToUse.push_back(local_category);
 		}
 	}
 //	std::cout << " ------------------ " << std::endl;
+}
+
+bool BehaviorGen::CompareTrajectoriesWithIds(std::vector<std::vector<PlannerHNS::WayPoint> >& paths, std::vector<int>& local_ids)
+{
+	if(local_ids.size() != paths.size())
+	{
+		std::cout << "Warning From Trajectory Selector, paths size mismatch, GlobalPaths: " << paths.size() << ", LocalPaths: " << local_ids.size() << std::endl;
+		return false;
+	}
+
+	for(auto& id : local_ids)
+	{
+		bool bFound = false;
+		for(auto& path: paths)
+		{
+			if(path.size() > 0 && path.at(0).gid == id)
+			{
+				bFound = true;
+			}
+		}
+
+		if(bFound == false)
+		{
+			std::cout << "Synchronization At Trajectory Selector: " << std::endl;
+			std::cout << "## Local IDs: ";
+			for(auto& id : local_ids)
+			{
+				std::cout << id << ",";
+			}
+			std::cout << std::endl << "## Global IDs: ";
+			for(auto& path: paths)
+			{
+				if(path.size() > 0)
+				{
+					std::cout << path.at(0).gid << ",";
+				}
+			}
+			std::cout << std::endl;
+
+			return false;
+		}
+	}
+
+	return true;
 }
 
 //----------------------------
@@ -661,11 +677,20 @@ void BehaviorGen::SendLocalPlanningTopics()
 	autoware_msgs::Waypoint wp_state = PlannerHNS::ROSHelpers::ConvertBehaviorStateToAutowareWaypoint(m_CurrentBehavior);
 	pub_BehaviorState.publish(wp_state);
 
-	std_msgs::Int32 ilane_msg, itraj_msg;
-	ilane_msg.data = m_CurrentBehavior.iLane;
-	itraj_msg.data = m_CurrentBehavior.iTrajectory;
-	pub_CurrLaneIndex.publish(ilane_msg);
-	pub_CurrTrajectoryIndex.publish(itraj_msg);
+	if(m_LanesRollOutsToUse.size() > 0)
+	{
+		std_msgs::Int32MultiArray ilane_itraj_path_ids;
+		ilane_itraj_path_ids.data.push_back(m_CurrentBehavior.iLane);
+		ilane_itraj_path_ids.data.push_back(m_CurrentBehavior.iTrajectory);
+		for(auto& path: m_GlobalPathsToUse)
+		{
+			if(path.size() > 0)
+			{
+				ilane_itraj_path_ids.data.push_back(path.at(0).gid);
+			}
+		}
+		pub_CurrGlobalLocalPathsIds.publish(ilane_itraj_path_ids);
+	}
 
 	//Send Ego Vehicle Simulation Pose Data
 	geometry_msgs::PoseArray sim_data;
