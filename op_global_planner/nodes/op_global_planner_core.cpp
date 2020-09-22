@@ -166,6 +166,17 @@ GlobalPlanner::GlobalPlanner()
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
+
+
+	/**
+	 * Animate Global path generation
+	 */
+	m_bEnableAnimation = false;
+	m_CurrMaxCost = 1;
+	m_iCurrLevel = 0;
+	m_nLevelSize = 1;
+	m_bSwitch = 0;
+	pub_GlobalPlanAnimationRviz = nh.advertise<visualization_msgs::MarkerArray>("/op_global_path_animation", 1, true);
 }
 
 GlobalPlanner::~GlobalPlanner()
@@ -331,21 +342,54 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 {
 	std::vector<int> predefinedLanesIds;
 	double ret = 0;
-
-	if(m_bStoppingState)
+	//The distance that is needed to brake from current speed to zero with acceleration of -1 m/s*s
+	double planning_distance = pow((m_CurrentPose.v), 2);
+	if(planning_distance < MIN_EXTRA_PLAN_DISTANCE)
 	{
-		generatedTotalPaths.clear();
-		ret = m_PlannerH.PlanUsingDPRandom(startPoint, 20, m_Map, generatedTotalPaths);
+		planning_distance = MIN_EXTRA_PLAN_DISTANCE;
+	}
+
+	if(m_bEnableAnimation)
+	{
+		if(m_PlanningVisualizeTree.size() > 0)
+		{
+			m_PlannerH.DeleteWaypoints(m_PlanningVisualizeTree);
+			m_AccumPlanLevels.markers.clear();
+			m_iCurrLevel = 0;
+			m_nLevelSize = 1;
+		}
+
+		std::vector<int> predefinedLanesIds;
+		double ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint,
+				MAX_GLOBAL_PLAN_SEARCH_DISTANCE, planning_distance, m_params.bEnableLaneChange, predefinedLanesIds,
+				m_Map, generatedTotalPaths, &m_PlanningVisualizeTree);
+
+		m_pCurrGoal = PlannerHNS::MappingHelpers::GetClosestWaypointFromMap(goalPoint, m_Map);
+
+		if(m_PlanningVisualizeTree.size() > 1)
+		{
+			m_CurrentLevel.push_back(m_PlanningVisualizeTree.at(0));
+			m_CurrMaxCost = 0;
+			for(auto& wp: m_PlanningVisualizeTree)
+			{
+				if(wp->cost > m_CurrMaxCost)
+				{
+					m_CurrMaxCost = wp->cost;
+				}
+			}
+		}
 	}
 	else
 	{
-		//The distance that is needed to brake from current speed to zero with acceleration of -1 m/s*s
-		double planning_distance = pow((m_CurrentPose.v), 2);
-		if(planning_distance < MIN_EXTRA_PLAN_DISTANCE)
+		if(m_bStoppingState)
 		{
-			planning_distance = MIN_EXTRA_PLAN_DISTANCE;
+			generatedTotalPaths.clear();
+			ret = m_PlannerH.PlanUsingDPRandom(startPoint, 20, m_Map, generatedTotalPaths);
 		}
-		ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint, MAX_GLOBAL_PLAN_SEARCH_DISTANCE, planning_distance,  m_params.bEnableLaneChange, predefinedLanesIds, m_Map, generatedTotalPaths);
+		else
+		{
+			ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint, MAX_GLOBAL_PLAN_SEARCH_DISTANCE, planning_distance,  m_params.bEnableLaneChange, predefinedLanesIds, m_Map, generatedTotalPaths);
+		}
 	}
 
 	if(ret == 0)
@@ -535,6 +579,63 @@ void GlobalPlanner::SendAvailableOptionsHMI()
 	autoware_msgs::State auto_state_msg;
 	auto_state_msg.mission_state = msg.CreateStringMessage();
 	pub_hmi_mission.publish(auto_state_msg);
+}
+
+void GlobalPlanner::AnimatedVisualizationForGlobalPath(double time_interval)
+{
+	if(UtilityHNS::UtilityH::GetTimeDiffNow(m_animation_timer) > time_interval)
+	{
+		UtilityHNS::UtilityH::GetTickCount(m_animation_timer);
+		m_CurrentLevel.clear();
+
+		for(unsigned int ilev = 0; ilev < m_nLevelSize && m_iCurrLevel < m_PlanningVisualizeTree.size() ; ilev ++)
+		{
+			m_CurrentLevel.push_back(m_PlanningVisualizeTree.at(m_iCurrLevel));
+			m_nLevelSize += m_PlanningVisualizeTree.at(m_iCurrLevel)->pFronts.size() - 1;
+			m_iCurrLevel++;
+		}
+
+
+		if(m_CurrentLevel.size() == 0 && m_GeneratedTotalPaths.size() > 0)
+		{
+			m_bSwitch++;
+			m_AccumPlanLevels.markers.clear();
+
+			if(m_bSwitch == 2)
+			{
+				for(unsigned int il = 0; il < m_GeneratedTotalPaths.size(); il++)
+				{
+					for(unsigned int ip = 0; ip < m_GeneratedTotalPaths.at(il).size(); ip ++)
+					{
+						m_CurrentLevel.push_back(&m_GeneratedTotalPaths.at(il).at(ip));
+					}
+
+				}
+				std::cout << "Switch On " << std::endl;
+				m_bSwitch = 0;
+			}
+			else
+			{
+				for(unsigned int ilev = 0; ilev < m_PlanningVisualizeTree.size()+200; ilev ++)
+				{
+					m_CurrentLevel.push_back(m_PlanningVisualizeTree.at(0));
+				}
+				std::cout << "Switch Off " << std::endl;
+			}
+
+			PlannerHNS::ROSHelpers::CreateNextPlanningTreeLevelMarker(m_CurrentLevel, m_AccumPlanLevels, m_pCurrGoal, m_CurrMaxCost);
+			pub_GlobalPlanAnimationRviz.publish(m_AccumPlanLevels);
+		}
+		else
+		{
+			PlannerHNS::ROSHelpers::CreateNextPlanningTreeLevelMarker(m_CurrentLevel, m_AccumPlanLevels, m_pCurrGoal, m_CurrMaxCost);
+
+			if(m_AccumPlanLevels.markers.size() > 0)
+			{
+				pub_GlobalPlanAnimationRviz.publish(m_AccumPlanLevels);
+			}
+		}
+	}
 }
 
 void GlobalPlanner::VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths)
@@ -765,8 +866,7 @@ bool GlobalPlanner::UpdateGoalIndex()
 void GlobalPlanner::MainLoop()
 {
 	ros::Rate loop_rate(25);
-	timespec animation_timer;
-	UtilityHNS::UtilityH::GetTickCount(animation_timer);
+	UtilityHNS::UtilityH::GetTickCount(m_animation_timer);
 
 	while (ros::ok())
 	{
@@ -814,6 +914,10 @@ void GlobalPlanner::MainLoop()
 			}
 
 			VisualizeDestinations(m_GoalsPos, m_iCurrentGoalIndex);
+			if(m_bEnableAnimation)
+			{
+				AnimatedVisualizationForGlobalPath(0.5);
+			}
 		}
 
 		loop_rate.sleep();

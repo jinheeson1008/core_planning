@@ -150,7 +150,6 @@ public:
   void MainLoop();
 
 private:
-  PlannerHNS::WayPoint* m_pCurrGoal;
   std::vector<UtilityHNS::DestinationsDataFileReader::DestinationData> m_destinations;
 
   // Callback function for subscriber.
@@ -227,6 +226,22 @@ private:
 	void kmlMapFileNameCallback(const std_msgs::String& file_name);
 	void LoadKmlMap();
 	void LoadMap();
+
+	/**
+	 * Animate Global path generation
+	 */
+	PlannerHNS::WayPoint* m_pCurrGoal;
+  	ros::Publisher pub_GlobalPlanAnimationRviz;
+  	std::vector<PlannerHNS::WayPoint*> m_PlanningVisualizeTree;
+  	std::vector<PlannerHNS::WayPoint*> m_CurrentLevel;
+  	visualization_msgs::MarkerArray m_AccumPlanLevels;
+  	unsigned int m_iCurrLevel;
+  	unsigned int m_nLevelSize;
+  	double m_CurrMaxCost;
+  	int m_bSwitch;
+  	bool m_bEnableAnimation;
+  	void AnimatedVisualizationForGlobalPath(double time_interval = 0.5);
+  	timespec m_animation_timer;
 
 };
 
