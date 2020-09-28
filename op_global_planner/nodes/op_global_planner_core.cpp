@@ -407,7 +407,14 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 			for(unsigned int i=0; i < generatedTotalPaths.size(); i++)
 			{
 				PlannerHNS::PlanningHelpers::FixPathDensity(generatedTotalPaths.at(i), m_params.pathDensity);
-				PlannerHNS::PlanningHelpers::SmoothPath(generatedTotalPaths.at(i), 0.49, 0.35 , 0.01);
+				PlannerHNS::PlanningHelpers::SmoothPath(generatedTotalPaths.at(i), 0.49, 0.1 , 0.1);
+			}
+		}
+		else
+		{
+			for(unsigned int i=0; i < generatedTotalPaths.size(); i++)
+			{
+				PlannerHNS::PlanningHelpers::SmoothPath(generatedTotalPaths.at(i), 0.49, 0.05 , 0.1);
 			}
 		}
 
