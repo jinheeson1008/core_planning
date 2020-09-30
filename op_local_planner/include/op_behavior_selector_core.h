@@ -92,6 +92,7 @@ protected: //Planning Related variables
 	PlannerHNS::DecisionMaker m_BehaviorGenerator;
 	PlannerHNS::BehaviorState m_CurrentBehavior;
 	bool m_bRequestNewPlanSent;
+	bool m_bShowActualDrivingPath;
 
   	std::vector<std::string> m_LogData;
   	std::vector<std::pair<PlannerHNS::WayPoint, PlannerHNS::PolygonShape> > m_ActualDrivingPath;
@@ -130,6 +131,7 @@ protected: //Planning Related variables
 	ros::Publisher pub_CurrGlobalLocalPathsIds;
 	ros::Publisher pub_RequestReplan;
 	ros::Publisher pub_BehaviorStateRviz;
+	ros::Publisher pub_CurrDrivingPathRviz;
 
 	// define subscribers.
 	ros::Subscriber sub_current_pose;

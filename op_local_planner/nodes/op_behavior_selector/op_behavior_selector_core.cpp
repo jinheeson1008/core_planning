@@ -34,6 +34,7 @@ BehaviorGen::BehaviorGen()
 	bBestCost = false;
 	bMap = false;
 	m_bRequestNewPlanSent = false;
+	m_bShowActualDrivingPath = false;
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
@@ -56,6 +57,7 @@ BehaviorGen::BehaviorGen()
 	pub_SelectedPathRviz = nh.advertise<visualization_msgs::MarkerArray>("local_selected_trajectory_rviz", 1);
 	pub_TargetSpeedRviz = nh.advertise<std_msgs::Float32>("op_target_velocity_rviz", 1);
 	pub_ActualSpeedRviz = nh.advertise<std_msgs::Float32>("op_actual_velocity_rviz", 1);
+	pub_CurrDrivingPathRviz = nh.advertise<visualization_msgs::MarkerArray>("op_actual_driving_path", 1);
 	pub_DetectedLight = nh.advertise<autoware_msgs::ExtractedPosition>("op_detected_light", 1);
 	pub_CurrGlobalLocalPathsIds = nh.advertise<std_msgs::Int32MultiArray>("op_curr_global_local_ids", 1);
 	pub_RequestReplan = nh.advertise<std_msgs::Bool>("op_global_replan", 1);
@@ -226,6 +228,8 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
 	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
+	_nh.getParam("/op_behavior_selector/show_driving_path", m_bShowActualDrivingPath);
+
 
 
 	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
@@ -833,6 +837,10 @@ void BehaviorGen::InsertNewActualPathPair(const double& min_record_distance)
 		PlannerHNS::PlanningHelpers::InitializeSafetyPolygon(m_CurrentPos, m_CarInfo, m_VehicleStatus, m_PlanningParams.horizontalSafetyDistancel, m_PlanningParams.verticalSafetyDistance, false, car_poly);
 		m_ActualDrivingPath.push_back(make_pair(m_CurrentPos, car_poly));
 	}
+
+	visualization_msgs::MarkerArray driving_path;
+	PlannerHNS::ROSHelpers::DrivingPathToMarkers(m_ActualDrivingPath, driving_path);
+	pub_CurrDrivingPathRviz.publish(driving_path);
 }
 
 void BehaviorGen::MainLoop()
@@ -909,6 +917,11 @@ void BehaviorGen::MainLoop()
 #endif
 
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(avg_dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
+
+			if(m_bShowActualDrivingPath)
+			{
+				InsertNewActualPathPair();
+			}
 
 			//if(!m_bRequestNewPlanDone && m_BehaviorGenerator.m_bRequestNewGlobalPlan)
 			if(m_BehaviorGenerator.m_bRequestNewGlobalPlan)
