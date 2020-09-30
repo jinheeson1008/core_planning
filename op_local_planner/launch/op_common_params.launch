@@ -30,11 +30,14 @@
 	<arg name="enableLaneChange" 			default="false" />	
 	
 	<!-- Vehicle Info, shared with controller and simulation -->
-	<arg name="width" 						default="1.85"  />
-	<arg name="length" 						default="4.2"  />
+	<arg name="height" 						default="1.47"  />
+	<arg name="front_length"				default="1.0"  />
+	<arg name="back_length"					default="0.6"  />
+	<arg name="width" 						default="1.82"  />
+	<arg name="length" 						default="4.54"  />	
 	<arg name="wheelBaseLength" 			default="2.7"  />
 	<arg name="turningRadius"				default="5.2"  />
-	<arg name="maxWheelAngle" 				default="0.45" /> <!-- radians -->
+	<arg name="maxWheelAngle" 				default="0.42" /> <!-- radians -->
 	<arg name="steeringDelay" 				default="1.2" /> <!-- time steering wheel take to turn from zero to max left or right -->
 	<arg name="minPursuiteDistance" 		default="3.0" /> <!-- min distance to forward following target point on the trajectory  -->
 	<arg name="maxAcceleration" 			default="2.0" /> <!-- m/s*s -->
@@ -87,9 +90,12 @@
 		<param name="enableTrafficLightBehavior" value="$(arg enableTrafficLightBehavior)" />
 		<param name="enableStopSignBehavior" 	value="$(arg enableStopSignBehavior)" />	
 		<param name="enableLaneChange" 			value="$(arg enableLaneChange)" />
-				
+		
+		<param name="height" 					value="$(arg height)"  />		
+		<param name="front_length" 				value="$(arg front_length)"  />
+		<param name="back_length" 				value="$(arg back_length)"  />
 		<param name="width" 					value="$(arg width)"  />
-		<param name="length" 					value="$(arg length)"  />
+		<param name="length" 					value="$(arg length)"  />		
 		<param name="wheelBaseLength" 			value="$(arg wheelBaseLength)"  />
 		<param name="turningRadius"				value="$(arg turningRadius)"  />
 		<param name="maxWheelAngle" 			value="$(arg maxWheelAngle)" />

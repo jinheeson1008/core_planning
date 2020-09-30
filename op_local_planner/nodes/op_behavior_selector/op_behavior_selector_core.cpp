@@ -170,6 +170,9 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	_nh.getParam("/op_common_params/enableLaneChange", m_PlanningParams.enableLaneChange);
 
+	_nh.getParam("/op_common_params/front_length", m_CarInfo.front_length);
+	_nh.getParam("/op_common_params/back_length", m_CarInfo.back_length);
+	_nh.getParam("/op_common_params/height", m_CarInfo.height);
 	_nh.getParam("/op_common_params/width", m_CarInfo.width);
 	_nh.getParam("/op_common_params/length", m_CarInfo.length);
 	_nh.getParam("/op_common_params/wheelBaseLength", m_CarInfo.wheel_base);
@@ -804,6 +807,31 @@ void BehaviorGen::LogLocalPlanningInfo(double dt)
 		str_out << UtilityHNS::DataRW::PathLogFolderName;
 		str_out << "Local_Trajectory_";
 		PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), m_BehaviorGenerator.m_Path);
+	}
+}
+
+void BehaviorGen::InsertNewActualPathPair(const double& min_record_distance)
+{
+	bool bInsertNew = false;
+	if(m_ActualDrivingPath.size() == 0)
+	{
+		bInsertNew = true;
+	}
+	else
+	{
+		PlannerHNS::WayPoint prev_p = m_ActualDrivingPath.back().first;
+		double d = hypot(prev_p.pos.y-m_CurrentPos.pos.y, prev_p.pos.x-m_CurrentPos.pos.x);
+		if(d > min_record_distance)
+		{
+			bInsertNew = true;
+		}
+	}
+
+	if(bInsertNew == true)
+	{
+		PlannerHNS::PolygonShape car_poly;
+		PlannerHNS::PlanningHelpers::InitializeSafetyPolygon(m_CurrentPos, m_CarInfo, m_VehicleStatus, m_PlanningParams.horizontalSafetyDistancel, m_PlanningParams.verticalSafetyDistance, false, car_poly);
+		m_ActualDrivingPath.push_back(make_pair(m_CurrentPos, car_poly));
 	}
 }
 

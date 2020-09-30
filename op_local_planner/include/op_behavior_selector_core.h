@@ -94,6 +94,7 @@ protected: //Planning Related variables
 	bool m_bRequestNewPlanSent;
 
   	std::vector<std::string> m_LogData;
+  	std::vector<std::pair<PlannerHNS::WayPoint, PlannerHNS::PolygonShape> > m_ActualDrivingPath;
 
   	PlannerHNS::PlanningParams m_PlanningParams;
   	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
@@ -178,6 +179,7 @@ protected: //Planning Related variables
   void SendLocalPlanningTopics();
   void VisualizeLocalPlanner();
   void LogLocalPlanningInfo(double dt);
+  void InsertNewActualPathPair(const double& min_record_distance = 2.0);
 
 public:
   BehaviorGen();

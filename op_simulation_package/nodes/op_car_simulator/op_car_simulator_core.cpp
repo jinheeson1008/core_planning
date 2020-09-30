@@ -223,8 +223,11 @@ void OpenPlannerCarSimulator::ReadParamFromLaunchFile(PlannerHNS::CAR_BASIC_INFO
 	_nh.getParam("enableStopSignBehavior", m_PlanningParams.enableStopSignBehavior);
 	_nh.getParam("enableLaneChange", m_PlanningParams.enableLaneChange);
 
-	_nh.getParam("width", 			m_CarInfo.width );
-	_nh.getParam("length", 		m_CarInfo.length );
+	_nh.getParam("front_length", m_CarInfo.front_length);
+	_nh.getParam("back_length", m_CarInfo.back_length);
+	_nh.getParam("height", m_CarInfo.height);
+	_nh.getParam("width", m_CarInfo.width );
+	_nh.getParam("length", m_CarInfo.length );
 	_nh.getParam("wheelBaseLength", m_CarInfo.wheel_base );
 	_nh.getParam("turningRadius", m_CarInfo.turning_radius );
 	_nh.getParam("maxSteerAngle", m_CarInfo.max_wheel_angle );
