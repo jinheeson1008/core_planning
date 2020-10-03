@@ -34,6 +34,7 @@
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseArray.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <autoware_msgs/State.h>
@@ -121,6 +122,8 @@ protected:
 	timespec m_WaitingTimer;
 	timespec m_ReplanningTimer;
 	bool m_bReplanSignal;
+	std::vector<std::pair<std::vector<PlannerHNS::WayPoint*> , timespec> > m_ModifiedMapItemsTimes;
+	int m_ClearCostTime; // in seconds
 
 	PlannerHNS::WayPoint m_PreviousPlanningPose;
 
@@ -143,6 +146,7 @@ protected:
 	ros::Subscriber sub_road_status_occupancy;
 	ros::Subscriber sub_hmi_mission;
 	ros::Subscriber sub_map_file_name;
+	ros::Subscriber sub_v2x_obstacles;
 
 public:
 	GlobalPlanner();
@@ -161,6 +165,7 @@ private:
   void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
   void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
   void callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg);
+  void callbackGetV2XReplanSignal(const geometry_msgs::PoseArrayConstPtr& msg);
   /**
    * @brief Communication between Global Planner and HMI bridge
    * @param msg
@@ -187,6 +192,7 @@ private:
   	void SendAvailableOptionsHMI();
   	bool UpdateGoalIndex();
   	bool UpdateGoalWithHMI();
+  	void ClearOldCostFromMap();
 
 
   	//Mapping Section

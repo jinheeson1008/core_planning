@@ -50,6 +50,7 @@ OpenPlannerSimulatorPerception::OpenPlannerSimulatorPerception()
 	nh.getParam("/op_perception_simulator/useNavGoalToSetStaticObstacle" , m_DecParams.bUseNavGoal);
 
 	pub_DetectedObjects = nh.advertise<autoware_msgs::CloudClusterArray>("simu_cloud_clusters",1);
+	pub_v2x_replan_signal = nh.advertise<geometry_msgs::PoseArray>("op_v2x_replanning_signal",1);
 
 	if(m_DecParams.bUseNavGoal == true)
 	{
@@ -100,6 +101,14 @@ void OpenPlannerSimulatorPerception::callbackGetRvizPoint(const geometry_msgs::P
 	m_SimulatedCluter.indicator_state = 3; // default indicator value
 
 	m_bSetSimulatedObj = true;
+
+	/**
+	 * Uncomment to enable testing replanning signal for v2x applications
+	 * This will send a replan signal to op_global_planner
+	 */
+//	geometry_msgs::PoseArray pose_list;
+//	pose_list.poses.push_back(point);
+//	pub_v2x_replan_signal.publish(pose_list);
 }
 
 void OpenPlannerSimulatorPerception::callbackGetSimuData(const geometry_msgs::PoseArray &msg)

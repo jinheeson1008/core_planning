@@ -25,6 +25,7 @@ namespace GlobalPlanningNS
 
 GlobalPlanner::GlobalPlanner()
 {
+	m_ClearCostTime = 5; // 2 hours before clearing the collision points
 	m_iMessageID = 1;
 	m_pCurrGoal = 0;
 	m_iCurrentGoalIndex = 0;
@@ -110,6 +111,7 @@ GlobalPlanner::GlobalPlanner()
 		LoadSimulationData();
 	}
 
+	sub_v2x_obstacles = nh.subscribe("/op_v2x_replanning_signal", 1, &GlobalPlanner::callbackGetV2XReplanSignal, this);
 	sub_replan_signal = nh.subscribe("/op_global_replan", 1, &GlobalPlanner::callbackGetReplanSignal, this);
 	sub_current_pose = nh.subscribe("/current_pose", 1, &GlobalPlanner::callbackGetCurrentPose, this);
 
@@ -283,6 +285,46 @@ bool GlobalPlanner::UpdateGoalWithHMI()
 void GlobalPlanner::callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg)
 {
 	m_bReplanSignal = msg->data;
+}
+
+void GlobalPlanner::callbackGetV2XReplanSignal(const geometry_msgs::PoseArrayConstPtr& msg)
+{
+	std::vector<PlannerHNS::WayPoint> points;
+	for(auto& p: msg->poses)
+	{
+		points.push_back(PlannerHNS::WayPoint(p.position.x, p.position.y, p.position.z, 0));
+	}
+
+	timespec t;
+	UtilityHNS::UtilityH::GetTickCount(t);
+	std::vector<PlannerHNS::WayPoint*> modified_nodes;
+	PlannerHNS::MappingHelpers::UpdateMapWithSignalPose(points, m_Map, modified_nodes, 0.75, 10000);
+	m_ModifiedMapItemsTimes.push_back(std::make_pair(modified_nodes, t));
+
+	m_bReplanSignal = true;
+}
+
+void GlobalPlanner::ClearOldCostFromMap()
+{
+	for(int i=0; i < (int)m_ModifiedMapItemsTimes.size(); i++)
+	{
+		if(UtilityHNS::UtilityH::GetTimeDiffNow(m_ModifiedMapItemsTimes.at(i).second) > m_ClearCostTime)
+		{
+			for(unsigned int j= 0 ; j < m_ModifiedMapItemsTimes.at(i).first.size(); j++)
+			{
+				for(unsigned int i_action=0; i_action < m_ModifiedMapItemsTimes.at(i).first.at(j)->actionCost.size(); i_action++)
+				{
+					if(m_ModifiedMapItemsTimes.at(i).first.at(j)->actionCost.at(i_action).first == PlannerHNS::CHANGE_DESTINATION)
+					{
+						m_ModifiedMapItemsTimes.at(i).first.at(j)->actionCost.at(i_action).second = 0;
+					}
+				}
+			}
+
+			m_ModifiedMapItemsTimes.erase(m_ModifiedMapItemsTimes.begin()+i);
+			i--;
+		}
+	}
 }
 
 void GlobalPlanner::callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr &msg)
@@ -920,6 +962,7 @@ void GlobalPlanner::MainLoop()
 				}
 			}
 
+			ClearOldCostFromMap();
 			VisualizeDestinations(m_GoalsPos, m_iCurrentGoalIndex);
 			if(m_bEnableAnimation)
 			{

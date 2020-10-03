@@ -3,7 +3,7 @@
 	
 	<arg name="evidence_trust_number" 	default="25"/>
 	<arg name="use_sim_time" 	default="false"/>
-	<arg name="show_driving_path" 	default="true"/>	
+	<arg name="show_driving_path" 	default="false"/>	
 			
 	<node pkg="op_local_planner" type="op_behavior_selector" name="op_behavior_selector" output="screen">
 	
