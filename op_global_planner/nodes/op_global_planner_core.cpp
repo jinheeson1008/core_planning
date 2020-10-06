@@ -39,6 +39,7 @@ GlobalPlanner::GlobalPlanner()
 	m_bDestinationError = false;
 	m_bReplanSignal = false;
 	m_GlobalPathID = 1;
+	m_bStart = false;
 	UtilityHNS::UtilityH::GetTickCount(m_WaitingTimer);
 	UtilityHNS::UtilityH::GetTickCount(m_ReplanningTimer);
 
@@ -338,12 +339,14 @@ void GlobalPlanner::callbackGetStartPose(const geometry_msgs::PoseWithCovariance
 {
 	m_CurrentPose = PlannerHNS::WayPoint(msg->pose.pose.position.x+m_OriginPos.position.x, msg->pose.pose.position.y+m_OriginPos.position.y, msg->pose.pose.position.z+m_OriginPos.position.z, tf::getYaw(msg->pose.pose.orientation));
 	m_StartPose = m_CurrentPose;
+	m_bStart = true;
 	ROS_INFO("Received Start pose");
 }
 
 void GlobalPlanner::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg)
 {
 	m_CurrentPose.pos = PlannerHNS::GPSPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
+	m_bStart = true;
 }
 
 void GlobalPlanner::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
@@ -922,7 +925,7 @@ void GlobalPlanner::MainLoop()
 		ros::spinOnce();
 		LoadMap();
 
-		if(m_bMap && m_GoalsPos.size() > 0)
+		if(m_bStart && m_bMap && m_GoalsPos.size() > 0)
 		{
 			bool bMakeNewPlan = false;
 			bool bDestinationReachSend= false;

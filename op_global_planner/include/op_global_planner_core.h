@@ -114,6 +114,7 @@ protected:
 	std::vector<int> m_prev_index;
 	int m_iMessageID;
 	bool m_bFirstStartHMI;
+	bool m_bStart;
 	bool m_bWaitingState;
 	bool m_bSlowDownState;
 	bool m_bStoppingState;
