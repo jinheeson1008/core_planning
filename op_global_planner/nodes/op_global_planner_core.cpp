@@ -25,7 +25,7 @@ namespace GlobalPlanningNS
 
 GlobalPlanner::GlobalPlanner()
 {
-	m_ClearCostTime = 5; // 2 hours before clearing the collision points
+	m_ClearCostTime = 200; // 2 hours before clearing the collision points
 	m_iMessageID = 1;
 	m_pCurrGoal = 0;
 	m_iCurrentGoalIndex = 0;
@@ -299,7 +299,7 @@ void GlobalPlanner::callbackGetV2XReplanSignal(const geometry_msgs::PoseArrayCon
 	timespec t;
 	UtilityHNS::UtilityH::GetTickCount(t);
 	std::vector<PlannerHNS::WayPoint*> modified_nodes;
-	PlannerHNS::MappingHelpers::UpdateMapWithSignalPose(points, m_Map, modified_nodes, 0.75, 10000);
+	PlannerHNS::MappingHelpers::UpdateMapWithSignalPose(points, m_Map, modified_nodes, 0.75, -1);
 	m_ModifiedMapItemsTimes.push_back(std::make_pair(modified_nodes, t));
 
 	m_bReplanSignal = true;
@@ -330,8 +330,11 @@ void GlobalPlanner::ClearOldCostFromMap()
 
 void GlobalPlanner::callbackGetGoalPose(const geometry_msgs::PoseStampedConstPtr &msg)
 {
-	PlannerHNS::WayPoint wp = PlannerHNS::WayPoint(msg->pose.position.x+m_OriginPos.position.x, msg->pose.position.y+m_OriginPos.position.y, msg->pose.position.z+m_OriginPos.position.z, tf::getYaw(msg->pose.orientation));
-	m_GoalsPos.push_back(wp);
+	if(m_GoalsPos.size() == 0)
+	{
+		PlannerHNS::WayPoint wp = PlannerHNS::WayPoint(msg->pose.position.x+m_OriginPos.position.x, msg->pose.position.y+m_OriginPos.position.y, msg->pose.position.z+m_OriginPos.position.z, tf::getYaw(msg->pose.orientation));
+		m_GoalsPos.push_back(wp);
+	}
 	ROS_INFO("Received Goal Pose");
 }
 
@@ -969,7 +972,7 @@ void GlobalPlanner::MainLoop()
 			VisualizeDestinations(m_GoalsPos, m_iCurrentGoalIndex);
 			if(m_bEnableAnimation)
 			{
-				AnimatedVisualizationForGlobalPath(0.5);
+				AnimatedVisualizationForGlobalPath(0);
 			}
 		}
 
