@@ -64,8 +64,12 @@ DirectController::DirectController()
   	sub_behavior_state = _nh.subscribe("/op_current_behavior",	1, &DirectController::callbackGetBehaviorState, 	this);
   	sub_current_trajectory = _nh.subscribe("/op_local_selected_trajectory", 1,	&DirectController::callbackGetCurrentTrajectory, this);
 
-  	m_Controller.m_bUseInternalOpACC = true;
-  	m_Controller.Init(m_ControlParams, m_CarInfo, true);
+  	m_ControllerHyperParams.bEnableCalibration = false;
+  	m_ControllerHyperParams.bEnableLogs = false;
+  	m_ControllerHyperParams.bUseInternalACC = true;
+  	m_ControllerHyperParams.bEnableVelocityMode = false;
+  	m_ControllerHyperParams.bEnableSteeringMode = false;
+  	m_Controller.Init(m_ControlParams, m_ControllerHyperParams, m_CarInfo);//, false, false, false, false);
 
 	std::cout << "OP direct controller initialized successfully " << std::endl;
 }
@@ -88,12 +92,12 @@ void DirectController::UpdateControlParams(ros::NodeHandle& nh)
 	nh.getParam("/op_common_params/steeringDelay", m_ControlParams.SteeringDelay);
 	nh.getParam("/op_common_params/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
 
-	nh.getParam("/op_common_params/experimentName", m_Controller.m_ExperimentFolderName);
-	if(m_Controller.m_ExperimentFolderName.size() > 0)
+	nh.getParam("/op_common_params/experimentName", m_ControllerHyperParams.log_file_path);
+	if(m_ControllerHyperParams.log_file_path.size() > 0)
 	{
-		if(m_Controller.m_ExperimentFolderName.at(m_Controller.m_ExperimentFolderName.size()-1) != '/')
+		if(m_ControllerHyperParams.log_file_path.at(m_ControllerHyperParams.log_file_path.size()-1) != '/')
 		{
-			m_Controller.m_ExperimentFolderName.push_back('/');
+			m_ControllerHyperParams.log_file_path.push_back('/');
 		}
 	}
 

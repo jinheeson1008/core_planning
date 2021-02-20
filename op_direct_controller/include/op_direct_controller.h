@@ -73,7 +73,7 @@ protected:
 
 	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
 	PlannerHNS::ControllerParams m_ControlParams;
-
+	PlannerHNS::ControllerHyperParams m_ControllerHyperParams;
 	PlannerHNS::MotionControl m_Controller;
 	PlannerHNS::ExtendedVehicleState m_TargetStatus;
 

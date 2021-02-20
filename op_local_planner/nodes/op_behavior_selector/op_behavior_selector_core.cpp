@@ -166,6 +166,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/minDistanceToAvoid", m_PlanningParams.minDistanceToAvoid);
 	_nh.getParam("/op_common_params/maxDistanceToAvoid", m_PlanningParams.maxDistanceToAvoid);
 	_nh.getParam("/op_common_params/speedProfileFactor", m_PlanningParams.speedProfileFactor);
+	nh.getParam("/op_common_params/curveSlowDownRatio", m_PlanningParams.curveSlowDownRatio);
 
 	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
 	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
@@ -198,7 +199,6 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	nh.getParam("/op_common_params/use_internal_acc", m_BehaviorGenerator.m_bUseInternalACC);
 	nh.getParam("/op_common_params/accelerationPushRatio", m_ControlParams.accelPushRatio);
 	nh.getParam("/op_common_params/brakingPushRatio", m_ControlParams.brakePushRatio);
-	nh.getParam("/op_common_params/curveSlowDownRatio", m_ControlParams.curveSlowDownRatio);
 
 	nh.getParam("/op_common_params/additionalBrakingDistance", m_PlanningParams.additionalBrakingDistance );
 	nh.getParam("/op_common_params/goalDiscoveryDistance", m_PlanningParams.goalDiscoveryDistance);
@@ -838,9 +838,12 @@ void BehaviorGen::InsertNewActualPathPair(const double& min_record_distance)
 		m_ActualDrivingPath.push_back(make_pair(m_CurrentPos, car_poly));
 	}
 
-	visualization_msgs::MarkerArray driving_path;
-	PlannerHNS::ROSHelpers::DrivingPathToMarkers(m_ActualDrivingPath, driving_path);
-	pub_CurrDrivingPathRviz.publish(driving_path);
+	if(m_ActualDrivingPath.size() > 1)
+	{
+		visualization_msgs::MarkerArray driving_path;
+		PlannerHNS::ROSHelpers::DrivingPathToMarkers(m_ActualDrivingPath, driving_path);
+		pub_CurrDrivingPathRviz.publish(driving_path);
+	}
 }
 
 void BehaviorGen::MainLoop()

@@ -720,21 +720,21 @@ void GlobalPlanner::VisualizeAndSend(const std::vector<std::vector<PlannerHNS::W
 		pub_Paths.publish(lane_array);
 	}
 
-	for(unsigned int i=0; i < generatedTotalPaths.size(); i++)
-	{
-		std::ostringstream str_out;
-		str_out << UtilityHNS::UtilityH::GetHomeDirectory();
-		if(m_params.exprimentName.size() == 0)
-			str_out << UtilityHNS::DataRW::LoggingMainfolderName;
-		else
-			str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_params.exprimentName;
-
-		str_out << UtilityHNS::DataRW::GlobalPathLogFolderName;
-		str_out << "GlobalPath_";
-		str_out << i;
-		str_out << "_";
-		PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), generatedTotalPaths.at(i));
-	}
+//	for(unsigned int i=0; i < generatedTotalPaths.size(); i++)
+//	{
+//		std::ostringstream str_out;
+//		str_out << UtilityHNS::UtilityH::GetHomeDirectory();
+//		if(m_params.exprimentName.size() == 0)
+//			str_out << UtilityHNS::DataRW::LoggingMainfolderName;
+//		else
+//			str_out << UtilityHNS::DataRW::LoggingMainfolderName + UtilityHNS::DataRW::ExperimentsFolderName + m_params.exprimentName;
+//
+//		str_out << UtilityHNS::DataRW::GlobalPathLogFolderName;
+//		str_out << "GlobalPath_";
+//		str_out << i;
+//		str_out << "_";
+//		PlannerHNS::PlanningHelpers::WritePathToFile(str_out.str(), generatedTotalPaths.at(i));
+//	}
 }
 
 void GlobalPlanner::VisualizeDestinations(std::vector<PlannerHNS::WayPoint>& destinations, const int& iSelected)

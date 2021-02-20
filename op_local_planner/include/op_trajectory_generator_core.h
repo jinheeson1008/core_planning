@@ -57,6 +57,7 @@ protected:
 	std::vector<int> m_prev_index;
 	std::vector<PlannerHNS::WayPoint> t_centerTrajectorySmoothed;
 	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_RollOuts;
+	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_SmoothRollOuts;
 	bool bWayGlobalPath;
   	std::vector<std::string>    m_LogData;
   	PlannerHNS::PlanningParams m_PlanningParams;
@@ -69,6 +70,10 @@ protected:
   	double m_distance_moved;
   	bool m_bStuckState;
   	int m_nOriginalRollOuts;
+
+  	double m_SteeringDelay;
+  	double m_MinPursuitDistance;
+  	bool m_bEnableForwardSimulation;
 
   	//ROS messages (topics)
 	ros::NodeHandle nh;
@@ -99,6 +104,7 @@ protected:
 
 	//Helper Functions
   void UpdatePlanningParams(ros::NodeHandle& _nh);
+  void GenerateSmoothTrajectory(const std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > >& rollOuts_in, std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > >& rollOuts_out);
 
 public:
 	TrajectoryGen();

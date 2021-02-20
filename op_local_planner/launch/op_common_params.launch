@@ -7,23 +7,24 @@
 		
 	<arg name="pathDensity" 				default="0.5" />
 	<arg name="rollOutDensity" 				default="0.5" />
-	<arg name="rollOutsNumber" 				default="6"    />
+	<arg name="rollOutsNumber" 				default="6" />
 		
 	<arg name="maxLocalPlanDistance" 		default="50" />	
-	<arg name="horizonDistance" 			default="200"  />
+	<arg name="horizonDistance" 			default="200" />
 	
-	<arg name="minFollowingDistance" 		default="35.0"  /> <!-- should be bigger than Distance to follow -->	
+	<arg name="minFollowingDistance" 		default="35.0" /> <!-- should be bigger than Distance to follow -->	
 	<arg name="minDistanceToAvoid" 			default="20.0" /> <!-- should be smaller than minFollowingDistance and larger than maxDistanceToAvoid -->
-	<arg name="maxDistanceToAvoid" 			default="5.0"  /> <!-- should be smaller than minDistanceToAvoid -->
-	<arg name="speedProfileFactor"			default="0.8"  />
+	<arg name="maxDistanceToAvoid" 			default="5.0" /> <!-- should be smaller than minDistanceToAvoid -->
+	<arg name="speedProfileFactor"			default="1.0" /> <!-- how fast the vehicle should drive through the corners and curves, less than (1) means slower speeds in the curves, larger than (1) means faster in the curves -->   
+	<arg name="curveSlowDownRatio" 			default="1.0" /> <!-- how early or late to brake for upcoming turn. 1 is automatically as openplanner calculates it, Smaller than 1 means late braking, greater than 1 means brake early, this value is a ratio -->
 	
-	<arg name="smoothingDataWeight"			default="0.45"  />
-	<arg name="smoothingSmoothWeight"		default="0.4"  />	
+	<arg name="smoothingDataWeight"			default="0.49" />
+	<arg name="smoothingSmoothWeight"		default="0.2" />	
 	
-	<arg name="horizontalSafetyDistance"	default="1.2"  />
-	<arg name="verticalSafetyDistance"		default="0.8"  />
+	<arg name="horizontalSafetyDistance"	default="1.2" />
+	<arg name="verticalSafetyDistance"		default="0.8" />
 	
-	<arg name="enableSwerving" 				default="true"  />
+	<arg name="enableSwerving" 				default="true" />
 	<arg name="enableFollowing" 			default="true" />	
 	<arg name="enableTrafficLightBehavior" 	default="false" />
 	<arg name="enableStopSignBehavior" 		default="false" />	
@@ -44,17 +45,18 @@
 	<arg name="maxDeceleration" 			default="-2.0" /> <!-- m/s*s -->
 	<arg name="maxVelocity" 				default="10.0" /> <!-- m/s -->
 	<arg name="minVelocity" 				default="0.1" /> <!-- m/s -->
-	<!-- Internal ACC parameters -->
-	<arg name="use_internal_acc" 			default="false" />
-	<arg name="accelerationPushRatio" 		default="1.5" />
-	<arg name="brakingPushRatio" 			default="3.4" />
-	<arg name="curveSlowDownRatio" 			default="0.5" />	
 	<!-- ................................................... -->
 	
-	<arg name="additionalBrakingDistance" 	default="1.0"  />
-	<arg name="goalDiscoveryDistance" 		default="1.0"  />
+	<!-- Internal ACC parameters, only used inside the LocalPlanner (Behavior Selector node) -->
+	<arg name="use_internal_acc" 			default="false" /> <!-- If enabled, the velocity associated with the final trajectory is the final speed profile needed to be followed by the controller, including following and stopping --> 
+	<arg name="accelerationPushRatio" 		default="1.0" /> <!-- push the velocity to increase even when the velocity feedback signal from sensing is very small or delayed, contribute to final acceleration. where 1 predefined acceleration value is used --> 
+	<arg name="brakingPushRatio" 			default="1.0" /> <!-- push the velocity to decrease even when the velocity feedback signal from sensing is very small or delayed, contribute to final deceleration. where 1 predefined deceleration value is used-->	
+	<!-- ................................................... -->
 	
-	<arg name="giveUpDistance" 				default="-1.0"  />
+	<arg name="additionalBrakingDistance" 	default="1.0" />
+	<arg name="goalDiscoveryDistance" 		default="1.0" />
+	
+	<arg name="giveUpDistance" 				default="-1.0" />
 			
 	<arg name="velocitySource"				default="1" /> <!-- read velocities from (0- Odometry, 1- autoware current_velocities, 2- car_info, 3- vehicle status ) "" -->
 	<arg name="vel_odom_topic"				default="/carla/ego_vehicle/odometry" />
@@ -62,7 +64,7 @@
 	<arg name="vel_can_topic"				default="/can_info" />
 	<arg name="vehicle_status_topic"		default="/vehicle_status" />
 			
-	<arg name="experimentName" 				default="decision_maker" />		
+	<arg name="experimentName" 				default="" />		
 	
 	<arg name="objects_input_topic" 		default="/detection/contour_tracker/objects" />
 

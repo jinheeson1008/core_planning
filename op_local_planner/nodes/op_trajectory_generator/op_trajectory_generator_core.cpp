@@ -30,6 +30,9 @@ TrajectoryGen::TrajectoryGen()
 	bEnableSmoothGlobalPathForCARLA = false;
 	bEnableVisualizeGlobalPathForCARLA = false;
 	bFrontAxelStart = false;
+	m_SteeringDelay = 0;
+	m_MinPursuitDistance = 0;
+	m_bEnableForwardSimulation = false;
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
@@ -88,12 +91,17 @@ void TrajectoryGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_trajectory_generator/samplingSpeedFactor", m_PlanningParams.rollInSpeedFactor);
 	_nh.getParam("/op_trajectory_generator/enableHeadingSmoothing", m_PlanningParams.enableHeadingSmoothing);
 	_nh.getParam("/op_trajectory_generator/startFromFrontAxel", bFrontAxelStart);
+	_nh.getParam("/op_trajectory_generator/enableForwardSimulation", m_bEnableForwardSimulation);
 
 	_nh.getParam("/op_common_params/enableSwerving", m_PlanningParams.enableSwerving);
 	if(m_PlanningParams.enableSwerving)
+	{
 		m_PlanningParams.enableFollowing = true;
+	}
 	else
+	{
 		_nh.getParam("/op_common_params/enableFollowing", m_PlanningParams.enableFollowing);
+	}
 
 	_nh.getParam("/op_common_params/enableTrafficLightBehavior", m_PlanningParams.enableTrafficLightBehavior);
 	_nh.getParam("/op_common_params/enableStopSignBehavior", m_PlanningParams.enableStopSignBehavior);
@@ -139,6 +147,9 @@ void TrajectoryGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
 	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
+
+	_nh.getParam("/op_common_params/steeringDelay", m_SteeringDelay);
+	_nh.getParam("/op_common_params/minPursuiteDistance", m_MinPursuitDistance);
 
 }
 
@@ -208,7 +219,9 @@ void TrajectoryGen::callbackGetAutowareStatus(const geometry_msgs::TwistStampedC
 	m_VehicleStatus.speed = msg->twist.linear.x;
 	m_CurrentPos.v = m_VehicleStatus.speed;
 	if(fabs(msg->twist.linear.x) > 0.25)
+	{
 		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/msg->twist.linear.x);
+	}
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }
@@ -234,10 +247,10 @@ void TrajectoryGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
 void TrajectoryGen::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
 {
 	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = msg->angle*DEG2RAD;
+	m_VehicleStatus.steer = -msg->angle*DEG2RAD;
 	m_CurrentPos.v = m_VehicleStatus.speed;
 	bVehicleStatus = true;
-//	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
+	//std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
 }
 
 void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
@@ -320,6 +333,27 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 	}
 }
 
+void TrajectoryGen::GenerateSmoothTrajectory(const std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > >& rollOuts_in, std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > >& rollOuts_out)
+{
+	std::vector<std::vector<PlannerHNS::WayPoint > > road_out;
+	std::vector<PlannerHNS::WayPoint > path_out;
+
+	rollOuts_out.clear();
+	for(auto& road : rollOuts_in)
+	{
+		road_out.clear();
+		for(auto& path : road)
+		{
+			path_out.clear();
+			PlannerHNS::PlannerH traj_planner;
+			traj_planner.GenerateKinematicallyFeasibleTrajectory(m_VehicleStatus, m_CurrentPos, m_CarInfo,
+					m_SteeringDelay, m_PlanningParams.pathDensity, m_MinPursuitDistance, m_CarInfo.max_speed_forward, path, path_out, false);
+			road_out.push_back(path_out);
+		}
+		rollOuts_out.push_back(road_out);
+	}
+}
+
 void TrajectoryGen::MainLoop()
 {
 	ros::Rate loop_rate(50);
@@ -353,6 +387,14 @@ void TrajectoryGen::MainLoop()
 				m_GlobalPathSections.push_back(t_centerTrajectorySmoothed);
 			}
 
+			if(m_PlanningParams.enableHeadingSmoothing)
+			{
+				double follow_distance = PlannerHNS::PlanningHelpers::CalculateLookAheadDistance(m_SteeringDelay, m_VehicleStatus.speed, m_MinPursuitDistance);
+				PlannerHNS::WayPoint estimatedPose = start_point;
+				PlannerHNS::PlanningHelpers::EstimateFuturePosition(start_point, m_VehicleStatus.steer, follow_distance, m_PlanningParams.pathDensity/2.0, m_CarInfo.wheel_base, estimatedPose);
+				start_point = estimatedPose;
+			}
+
 			std::vector<PlannerHNS::WayPoint> sampledPoints_debug;
 			m_Planner.GenerateRunoffTrajectory(m_GlobalPathSections, start_point,
 								m_PlanningParams.enableLaneChange,
@@ -374,14 +416,24 @@ void TrajectoryGen::MainLoop()
 								-1 , -1,
 								m_RollOuts, sampledPoints_debug);
 
-			autoware_msgs::LaneArray local_lanes;
-			for(unsigned int i=0; i < m_RollOuts.size(); i++)
+
+			if(m_bEnableForwardSimulation)
 			{
-				for(unsigned int j=0; j < m_RollOuts.at(i).size(); j++)
+				GenerateSmoothTrajectory(m_RollOuts, m_SmoothRollOuts);
+			}
+			else
+			{
+				m_SmoothRollOuts = m_RollOuts;
+			}
+
+			autoware_msgs::LaneArray local_lanes;
+			for(unsigned int i=0; i < m_SmoothRollOuts.size(); i++)
+			{
+				for(unsigned int j=0; j < m_SmoothRollOuts.at(i).size(); j++)
 				{
 					autoware_msgs::Lane lane;
-					PlannerHNS::PlanningHelpers::PredictConstantTimeCostForTrajectory(m_RollOuts.at(i).at(j), start_point, m_PlanningParams.minSpeed, m_PlanningParams.microPlanDistance);
-					PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_RollOuts.at(i).at(j), lane);
+					PlannerHNS::PlanningHelpers::PredictConstantTimeCostForTrajectory(m_SmoothRollOuts.at(i).at(j), start_point, m_PlanningParams.minSpeed, m_PlanningParams.microPlanDistance);
+					PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_SmoothRollOuts.at(i).at(j), lane);
 					lane.closest_object_distance = 0;
 					lane.closest_object_velocity = 0;
 					lane.cost = 0;
@@ -396,7 +448,7 @@ void TrajectoryGen::MainLoop()
 			sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 	1,		&TrajectoryGen::callbackGetGlobalPlannerPath, 	this);
 
 		visualization_msgs::MarkerArray all_rollOuts;
-		PlannerHNS::ROSHelpers::TrajectoriesToMarkers(m_RollOuts, all_rollOuts);
+		PlannerHNS::ROSHelpers::TrajectoriesToMarkers(m_SmoothRollOuts, all_rollOuts);
 		pub_LocalTrajectoriesRviz.publish(all_rollOuts);
 
 		loop_rate.sleep();

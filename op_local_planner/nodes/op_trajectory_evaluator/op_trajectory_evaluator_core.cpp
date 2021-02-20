@@ -202,8 +202,10 @@ void TrajectoryEvalCore::callbackGetAutowareStatus(const geometry_msgs::TwistSta
 {
 	m_VehicleStatus.speed = msg->twist.linear.x;
 	m_CurrentPos.v = m_VehicleStatus.speed;
-	if(fabs(msg->twist.linear.x) > 0.25)
+	if(fabs(msg->twist.linear.x) > 0.025)
+	{
 		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/msg->twist.linear.x);
+	}
 	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
 	bVehicleStatus = true;
 }

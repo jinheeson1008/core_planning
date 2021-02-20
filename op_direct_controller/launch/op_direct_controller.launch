@@ -7,7 +7,7 @@
 	<arg name="avg_engine_brake_accel"		default="-1.0"/> <!-- m/s2 -->
 	<arg name="min_follow_safe_distance"	default="15.0"/> <!-- m -->
 		
-	<arg name="max_steer_value"				default="660"/> <!-- degrees -->	
+	<arg name="max_steer_value"				default="11.52"/> <!-- radians -->	
 	<arg name="max_steer_torque"			default="100"/>
 	<arg name="min_steer_torque"			default="-100"/> 
 	

@@ -181,7 +181,7 @@ protected: //Planning Related variables
   void SendLocalPlanningTopics();
   void VisualizeLocalPlanner();
   void LogLocalPlanningInfo(double dt);
-  void InsertNewActualPathPair(const double& min_record_distance = 2.0);
+  void InsertNewActualPathPair(const double& min_record_distance = 1.0);
 
 public:
   BehaviorGen();
