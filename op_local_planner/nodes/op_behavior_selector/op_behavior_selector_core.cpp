@@ -660,10 +660,9 @@ void BehaviorGen::VisualizeLocalPlanner()
 	pub_ActualSpeedRviz.publish(target_speed);
 
 	visualization_msgs::MarkerArray selected_path;
-	pub_SelectedPathRviz.publish(selected_path);
 	std::vector<PlannerHNS::WayPoint> path = m_BehaviorGenerator.m_Path;
 	PlannerHNS::ROSHelpers::TrajectorySelectedToMarkers(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path);
-	PlannerHNS::ROSHelpers::TrajectorySelectedToCircles(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path, 5);
+	//PlannerHNS::ROSHelpers::TrajectorySelectedToCircles(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path, 2);
 	pub_SelectedPathRviz.publish(selected_path);
 
 	//To Test Synchronization Problem

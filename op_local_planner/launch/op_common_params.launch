@@ -39,7 +39,7 @@
 	<arg name="wheelBaseLength" 			default="2.7"  />
 	<arg name="turningRadius"				default="5.2"  />
 	<arg name="maxWheelAngle" 				default="0.42" /> <!-- radians -->
-	<arg name="steeringDelay" 				default="1.2" /> <!-- time steering wheel take to turn from zero to max left or right -->
+	<arg name="steeringDelay" 				default="0.3" /> <!-- time steering wheel take to turn from zero to max left or right -->
 	<arg name="minPursuiteDistance" 		default="3.0" /> <!-- min distance to forward following target point on the trajectory  -->
 	<arg name="maxAcceleration" 			default="2.0" /> <!-- m/s*s -->
 	<arg name="maxDeceleration" 			default="-2.0" /> <!-- m/s*s -->
