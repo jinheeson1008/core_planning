@@ -184,6 +184,11 @@ void MotionPrediction::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
 
 	_nh.getParam("/op_common_params/objects_input_topic" , m_TrackedObjectsTopicName);
+	if(m_TrackedObjectsTopicName.empty())
+	{
+		m_TrackedObjectsTopicName = "/detection/contour_tracker/objects";
+	}
+
 	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
 	if(m_ExperimentFolderName.size() > 0)
 	{

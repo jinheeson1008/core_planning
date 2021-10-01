@@ -57,7 +57,7 @@ public:
 		unsigned int greaterIndex = 0;
 		for(unsigned int i=0; i< vectorsFromCenter.size(); i++)
 		{
-			if(vectorsFromCenter.at(i).cost > v.cost)
+			if(vectorsFromCenter.at(i).distanceCost > v.distanceCost)
 			{
 				bGreaterFound = true;
 				greaterIndex = i;

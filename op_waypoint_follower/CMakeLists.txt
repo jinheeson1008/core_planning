@@ -21,7 +21,7 @@ catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS
     autoware_msgs
-    autoware_can_msgs 
+    autoware_can_msgs
     geometry_msgs
     op_ros_helpers
     map_file

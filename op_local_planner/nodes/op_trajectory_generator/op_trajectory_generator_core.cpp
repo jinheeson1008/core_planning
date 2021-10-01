@@ -342,6 +342,7 @@ void TrajectoryGen::GenerateSmoothTrajectory(const std::vector<std::vector<std::
 	for(auto& road : rollOuts_in)
 	{
 		road_out.clear();
+		int min_size = DBL_MAX;
 		for(auto& path : road)
 		{
 			path_out.clear();
@@ -349,6 +350,20 @@ void TrajectoryGen::GenerateSmoothTrajectory(const std::vector<std::vector<std::
 			traj_planner.GenerateKinematicallyFeasibleTrajectory(m_VehicleStatus, m_CurrentPos, m_CarInfo,
 					m_SteeringDelay, m_PlanningParams.pathDensity, m_MinPursuitDistance, m_CarInfo.max_speed_forward, path, path_out, false);
 			road_out.push_back(path_out);
+			if(path_out.size() < min_size)
+			{
+				min_size = path_out.size();
+			}
+		}
+
+		//Trim the simulated trajectory so it has the same number of waypoints as the
+		// smallest trajectory size in all rollouts, it is important to keep consistency with the local planning stack
+		for(auto& path : road_out)
+		{
+			if(path.size() > min_size)
+			{
+				path.resize(min_size);
+			}
 		}
 		rollOuts_out.push_back(road_out);
 	}
