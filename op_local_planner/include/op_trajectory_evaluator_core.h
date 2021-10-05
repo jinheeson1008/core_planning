@@ -31,6 +31,7 @@
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/TrajectoryEvaluator.h"
 #include "op_ros_helpers/ROSVelocityHandler.h"
+#include "op_ros_helpers/op_ParamsHandler.h"
 
 namespace TrajectoryEvaluatorNS
 {
@@ -51,6 +52,7 @@ protected:
 	bool m_bKeepCurrentIfPossible;
 
 	PlannerHNS::VelocityHandler m_VelHandler;
+	PlannerHNS::ParamsHandler m_ParamsHandler;
 
 	std::vector<PlannerHNS::WayPoint> m_temp_path;
 	std::vector<int> m_CurrGlobalPathsIds;

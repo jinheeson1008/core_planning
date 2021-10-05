@@ -49,6 +49,7 @@ TrajectoryGen::TrajectoryGen()
 	sub_current_pose = nh.subscribe("/current_pose", 1, &TrajectoryGen::callbackGetCurrentPose, this);
 
 	m_VelHandler.InitVelocityHandler(nh, m_CarInfo, &m_VehicleStatus, &m_CurrentPos);
+	m_ParamsHandler.InitHandler(_nh, &m_PlanningParams, &m_CarInfo, nullptr);
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryGen::callbackGetGlobalPlannerPath, this);
 
@@ -240,7 +241,7 @@ void TrajectoryGen::GenerateSmoothTrajectory(const std::vector<std::vector<std::
 	for(auto& road : rollOuts_in)
 	{
 		road_out.clear();
-		int min_size = DBL_MAX;
+		int min_size = INT_MAX;
 		for(auto& path : road)
 		{
 			path_out.clear();

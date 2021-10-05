@@ -38,6 +38,7 @@
 #include "op_utility/DataRW.h"
 #include "op_ros_helpers/ROSMapHandler.h"
 #include "op_ros_helpers/ROSVelocityHandler.h"
+#include "op_ros_helpers/op_ParamsHandler.h"
 
 #define LOG_LOCAL_PLANNING_DATA
 
@@ -92,6 +93,9 @@ protected: //Planning Related variables
 	autoware_msgs::ControlCommand m_Ctrl_cmd;
 
 	std::string m_ExperimentFolderName;
+
+	//timeout temp behavior, outside the behavior state
+	timespec m_TimeSinceLastChange;
 
 	//ROS messages (topics)
 	ros::NodeHandle nh;
@@ -161,6 +165,7 @@ public:
 
   PlannerHNS::MapHandler m_MapHandler;
   PlannerHNS::VelocityHandler m_VelHandler;
+  PlannerHNS::ParamsHandler m_ParamsHandler;
 };
 
 }

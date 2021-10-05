@@ -31,6 +31,7 @@
 #include "op_utility/DataRW.h"
 #include "op_ros_helpers/ROSMapHandler.h"
 #include "op_ros_helpers/ROSVelocityHandler.h"
+#include "op_ros_helpers/op_ParamsHandler.h"
 
 namespace MotionPredictorNS
 {
@@ -118,6 +119,7 @@ public:
 
 	PlannerHNS::MapHandler m_MapHandler;
 	PlannerHNS::VelocityHandler m_VelHandler;
+	PlannerHNS::ParamsHandler m_ParamsHandler;
 };
 
 }

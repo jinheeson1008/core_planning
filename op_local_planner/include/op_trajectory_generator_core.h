@@ -27,6 +27,7 @@
 #include "op_planner/PlannerH.h"
 #include "op_planner/PlannerCommonDef.h"
 #include "op_ros_helpers/ROSVelocityHandler.h"
+#include "op_ros_helpers/op_ParamsHandler.h"
 
 namespace TrajectoryGeneratorNS
 {
@@ -70,6 +71,7 @@ protected:
   	double m_MinPursuitDistance;
   	bool m_bEnableForwardSimulation;
   	PlannerHNS::VelocityHandler m_VelHandler;
+  	PlannerHNS::ParamsHandler m_ParamsHandler;
 
   	//ROS messages (topics)
 	ros::NodeHandle nh;

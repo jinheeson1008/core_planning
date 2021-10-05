@@ -53,6 +53,7 @@ MotionPrediction::MotionPrediction()
 	sub_current_pose 	= nh.subscribe("/current_pose", 1,	&MotionPrediction::callbackGetCurrentPose, 		this);
 
 	m_VelHandler.InitVelocityHandler(nh, m_CarInfo, &m_VehicleStatus, &m_CurrentPos);
+	m_ParamsHandler.InitHandler(_nh, &m_PlanningParams, &m_CarInfo, &m_ControlParams);
 
 	UtilityHNS::UtilityH::GetTickCount(m_VisualizationTimer);
 	PlannerHNS::ROSHelpers::InitPredMarkers(500, m_PredictedTrajectoriesDummy);
@@ -120,6 +121,11 @@ void MotionPrediction::UpdatePlanningParams(ros::NodeHandle& _nh)
 	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
 
 	_nh.getParam("/op_common_params/objects_input_topic" , m_TrackedObjectsTopicName);
+	if(m_TrackedObjectsTopicName.empty())
+	{
+		m_TrackedObjectsTopicName = "/detection/contour_tracker/objects";
+	}
+
 	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
 	if(m_ExperimentFolderName.size() > 0)
 	{

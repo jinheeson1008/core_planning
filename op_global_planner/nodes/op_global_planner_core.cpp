@@ -94,26 +94,6 @@ GlobalPlanner::GlobalPlanner()
 
 	m_VelHandler.InitVelocityHandler(nh, PlannerHNS::CAR_BASIC_INFO(), &m_VehicleState, &m_CurrentPose);
 
-//	int bVelSource = 1;
-//	nh.getParam("/op_global_planner/velocitySource", bVelSource);
-//	if(bVelSource == 0)
-//	{
-//		sub_robot_odom = nh.subscribe("/odom", 1, &GlobalPlanner::callbackGetRobotOdom, this);
-//	}
-//	else if(bVelSource == 1)
-//	{
-//		sub_current_velocity = nh.subscribe("/current_velocity", 1, &GlobalPlanner::callbackGetAutowareStatus, this);
-//	}
-//	else if(bVelSource == 2)
-//	{
-//		sub_can_info = nh.subscribe("/can_info", 1, &GlobalPlanner::callbackGetCANInfo, this);
-//	}
-//	else if(bVelSource == 3)
-//	{
-//		std::string velocity_topic;
-//		nh.getParam("/vehicle_status_topic", velocity_topic);
-//		sub_vehicle_status = nh.subscribe(velocity_topic, 1, &GlobalPlanner::callbackGetVehicleStatus, this);
-//	}
 
 	m_MapHandler.InitMapHandler(nh, "/op_global_planner/mapSource",
 			"/op_global_planner/mapFileName", "/op_global_planner/lanelet2_origin");

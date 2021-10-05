@@ -82,6 +82,8 @@ BehaviorGen::BehaviorGen()
 	m_VelHandler.InitVelocityHandler(nh, m_CarInfo, &m_VehicleStatus, &m_CurrentPos);
 	//----------------------------
 
+	m_ParamsHandler.InitHandler(_nh, &m_PlanningParams, &m_CarInfo, &m_ControlParams);
+
 	//Mapping Section
 	m_MapHandler.InitMapHandler(nh, "/op_common_params/mapSource",
 			"/op_common_params/mapFileName", "/op_common_params/lanelet2_origin");
@@ -128,7 +130,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/minDistanceToAvoid", m_PlanningParams.minDistanceToAvoid);
 	_nh.getParam("/op_common_params/maxDistanceToAvoid", m_PlanningParams.maxDistanceToAvoid);
 	_nh.getParam("/op_common_params/speedProfileFactor", m_PlanningParams.speedProfileFactor);
-	nh.getParam("/op_common_params/curveSlowDownRatio", m_PlanningParams.curveSlowDownRatio);
+	_nh.getParam("/op_common_params/curveSlowDownRatio", m_PlanningParams.curveSlowDownRatio);
 
 	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
 	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
@@ -153,18 +155,18 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	m_ControlParams.Steering_Gain = PlannerHNS::PID_CONST(0.07, 0.02, 0.01);
 	m_ControlParams.Velocity_Gain = PlannerHNS::PID_CONST(0.1, 0.005, 0.1);
-	m_ControlParams.min_safe_follow_distance = m_PlanningParams.maxDistanceToAvoid;
-	nh.getParam("/op_common_params/steeringDelay", m_ControlParams.SteeringDelay);
-	nh.getParam("/op_common_params/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
+	m_ControlParams.min_safe_follow_distance = m_PlanningParams.minDistanceToAvoid;
+	_nh.getParam("/op_common_params/steeringDelay", m_ControlParams.SteeringDelay);
+	_nh.getParam("/op_common_params/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
 
 	//Internal ACC parameters
-	nh.getParam("/op_common_params/use_internal_acc", m_BehaviorGenerator.m_bUseInternalACC);
-	nh.getParam("/op_common_params/accelerationPushRatio", m_ControlParams.accelPushRatio);
-	nh.getParam("/op_common_params/brakingPushRatio", m_ControlParams.brakePushRatio);
+	_nh.getParam("/op_common_params/use_internal_acc", m_BehaviorGenerator.m_bUseInternalACC);
+	_nh.getParam("/op_common_params/accelerationPushRatio", m_ControlParams.accelPushRatio);
+	_nh.getParam("/op_common_params/brakingPushRatio", m_ControlParams.brakePushRatio);
 
-	nh.getParam("/op_common_params/additionalBrakingDistance", m_PlanningParams.additionalBrakingDistance );
-	nh.getParam("/op_common_params/goalDiscoveryDistance", m_PlanningParams.goalDiscoveryDistance);
-	nh.getParam("/op_common_params/giveUpDistance", m_PlanningParams.giveUpDistance );
+	_nh.getParam("/op_common_params/additionalBrakingDistance", m_PlanningParams.additionalBrakingDistance );
+	_nh.getParam("/op_common_params/goalDiscoveryDistance", m_PlanningParams.goalDiscoveryDistance);
+	_nh.getParam("/op_common_params/giveUpDistance", m_PlanningParams.giveUpDistance );
 
 	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
 	_nh.getParam("/op_behavior_selector/show_driving_path", m_bShowActualDrivingPath);
@@ -755,6 +757,7 @@ void BehaviorGen::MainLoop()
 				x.lightType = m_CurrLightStatus;
 			}
 
+			m_BehaviorGenerator.UpdateParameters(m_ControlParams,  m_PlanningParams, m_CarInfo);
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(avg_dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
 			if(m_bShowActualDrivingPath)
@@ -775,6 +778,23 @@ void BehaviorGen::MainLoop()
 			else
 			{
 				m_bRequestNewPlanSent = false;
+			}
+
+			//Increase the number of roll out if the vehicle is stopped behind another vehicle for long time 
+			if(m_CurrentBehavior.state == PlannerHNS::FOLLOW_STATE)
+			{
+				if(m_VehicleStatus.speed > 0.1)
+				{
+					UtilityHNS::UtilityH::GetTickCount(m_TimeSinceLastChange);
+				}
+				else if(UtilityHNS::UtilityH::GetTimeDiffNow(m_TimeSinceLastChange) > 15)
+				{
+					m_ParamsHandler.UpdateRolloutsNumber(10);
+				}
+			}
+			else
+			{
+				UtilityHNS::UtilityH::GetTickCount(m_TimeSinceLastChange);
 			}
 
 

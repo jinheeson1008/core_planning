@@ -124,7 +124,6 @@ protected:
 	ros::Subscriber sub_start_pose;
 	ros::Subscriber sub_goal_pose;
 	ros::Subscriber sub_current_pose;
-//	ros::Subscriber sub_road_status_occupancy;
 	ros::Subscriber sub_hmi_mission;
 	ros::Subscriber sub_v2x_obstacles;
 

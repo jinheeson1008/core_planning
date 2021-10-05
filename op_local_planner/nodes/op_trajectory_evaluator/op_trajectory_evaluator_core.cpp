@@ -48,6 +48,7 @@ TrajectoryEvalCore::TrajectoryEvalCore()
 	sub_current_pose = nh.subscribe("/current_pose", 1, &TrajectoryEvalCore::callbackGetCurrentPose, this);
 
 	m_VelHandler.InitVelocityHandler(nh, m_CarInfo, &m_VehicleStatus, &m_CurrentPos);
+	m_ParamsHandler.InitHandler(_nh, &m_PlanningParams, &m_CarInfo, nullptr);
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryEvalCore::callbackGetGlobalPlannerPath, this);
 	sub_LocalPlannerPaths = nh.subscribe("/local_trajectories", 1, &TrajectoryEvalCore::callbackGetLocalPlannerPath, this);
@@ -214,6 +215,12 @@ void TrajectoryEvalCore::callbackGetGlobalPlannerPath(const autoware_msgs::LaneA
 
 void TrajectoryEvalCore::callbackGetLocalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
+	if(msg->lanes.size() != (m_PlanningParams.rollOutNumber + 1))
+	{
+		std::cout << " ### Waiting until nodes are synchronized, Generated rollouts = " << msg->lanes.size() << ", But They should = " << m_PlanningParams.rollOutNumber + 1 << std::endl;
+		return;
+	}
+
 	if(msg->lanes.size() > 0)
 	{
 		std::vector< std::vector<PlannerHNS::WayPoint> > received_local_rollouts;
