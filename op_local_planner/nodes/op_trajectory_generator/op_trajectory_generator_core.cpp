@@ -51,26 +51,8 @@ TrajectoryGen::TrajectoryGen()
 	sub_initialpose = nh.subscribe("/initialpose", 1, &TrajectoryGen::callbackGetInitPose, this);
 	sub_current_pose = nh.subscribe("/current_pose", 1, &TrajectoryGen::callbackGetCurrentPose, this);
 
-	int bVelSource = 1;
-	_nh.getParam("/op_common_params/velocitySource", bVelSource);
-	std::string velocity_topic;
-	if(bVelSource == 0)
-	{
-		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 1,	&TrajectoryGen::callbackGetRobotOdom, this);
-	}
-	else if(bVelSource == 1)
-	{
-		sub_current_velocity = nh.subscribe("/current_velocity", 1, &TrajectoryGen::callbackGetAutowareStatus, this);
-	}
-	else if(bVelSource == 2)
-	{
-		sub_can_info = nh.subscribe("/can_info", 1, &TrajectoryGen::callbackGetCANInfo, this);
-	}
-	else if(bVelSource == 3)
-	{
-		nh.getParam("/op_common_params/vehicle_status_topic", velocity_topic);
-		sub_vehicle_status = _nh.subscribe(velocity_topic, 1, &TrajectoryGen::callbackGetVehicleStatus, this);
-	}
+	m_VelHandler.InitVelocityHandler(nh, m_CarInfo, &m_VehicleStatus, &m_CurrentPos);
+	m_ParamsHandler.InitHandler(_nh, &m_PlanningParams, &m_CarInfo, nullptr);
 
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryGen::callbackGetGlobalPlannerPath, this);
 
@@ -214,45 +196,6 @@ void TrajectoryGen::callbackGetCurrentPose(const geometry_msgs::PoseStampedConst
 	}
 }
 
-void TrajectoryGen::callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg)
-{
-	m_VehicleStatus.speed = msg->twist.linear.x;
-	m_CurrentPos.v = m_VehicleStatus.speed;
-	if(fabs(msg->twist.linear.x) > 0.25)
-	{
-		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/msg->twist.linear.x);
-	}
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void TrajectoryGen::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg)
-{
-	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_wheel_angle / m_CarInfo.max_steer_value;
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void TrajectoryGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
-{
-	m_VehicleStatus.speed = msg->twist.twist.linear.x;
-
-	if(msg->twist.twist.linear.x != 0)
-		m_VehicleStatus.steer += atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void TrajectoryGen::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
-{
-	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = -msg->angle*DEG2RAD;
-	m_CurrentPos.v = m_VehicleStatus.speed;
-	bVehicleStatus = true;
-	//std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
-}
-
 void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
 	if(msg->lanes.size() > 0)
@@ -342,7 +285,7 @@ void TrajectoryGen::GenerateSmoothTrajectory(const std::vector<std::vector<std::
 	for(auto& road : rollOuts_in)
 	{
 		road_out.clear();
-		int min_size = DBL_MAX;
+		int min_size = INT_MAX;
 		for(auto& path : road)
 		{
 			path_out.clear();
@@ -365,6 +308,7 @@ void TrajectoryGen::GenerateSmoothTrajectory(const std::vector<std::vector<std::
 				path.resize(min_size);
 			}
 		}
+
 		rollOuts_out.push_back(road_out);
 	}
 }

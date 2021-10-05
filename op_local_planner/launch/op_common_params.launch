@@ -39,16 +39,16 @@
 	<arg name="wheelBaseLength" 			default="2.7"  />
 	<arg name="turningRadius"				default="5.2"  />
 	<arg name="maxWheelAngle" 				default="0.42" /> <!-- radians -->
-	<arg name="steeringDelay" 				default="1.2" /> <!-- time steering wheel take to turn from zero to max left or right -->
+	<arg name="steeringDelay" 				default="0.3" /> <!-- time steering wheel take to turn from zero to max left or right -->
 	<arg name="minPursuiteDistance" 		default="3.0" /> <!-- min distance to forward following target point on the trajectory  -->
-	<arg name="maxAcceleration" 			default="2.0" /> <!-- m/s*s -->
-	<arg name="maxDeceleration" 			default="-2.0" /> <!-- m/s*s -->
+	<arg name="maxAcceleration" 			default="3.0" /> <!-- m/s*s -->
+	<arg name="maxDeceleration" 			default="-3.0" /> <!-- m/s*s -->
 	<arg name="maxVelocity" 				default="10.0" /> <!-- m/s -->
 	<arg name="minVelocity" 				default="0.1" /> <!-- m/s -->
 	<!-- ................................................... -->
 	
 	<!-- Internal ACC parameters, only used inside the LocalPlanner (Behavior Selector node) -->
-	<arg name="use_internal_acc" 			default="false" /> <!-- If enabled, the velocity associated with the final trajectory is the final speed profile needed to be followed by the controller, including following and stopping --> 
+	<arg name="use_internal_acc" 			default="true" /> <!-- If enabled, the velocity associated with the final trajectory is the final speed profile needed to be followed by the controller, including following and stopping --> 
 	<arg name="accelerationPushRatio" 		default="1.0" /> <!-- push the velocity to increase even when the velocity feedback signal from sensing is very small or delayed, contribute to final acceleration. where 1 predefined acceleration value is used --> 
 	<arg name="brakingPushRatio" 			default="1.0" /> <!-- push the velocity to decrease even when the velocity feedback signal from sensing is very small or delayed, contribute to final deceleration. where 1 predefined deceleration value is used-->	
 	<!-- ................................................... -->
@@ -59,7 +59,7 @@
 	<arg name="giveUpDistance" 				default="-1.0" />
 			
 	<arg name="velocitySource"				default="1" /> <!-- read velocities from (0- Odometry, 1- autoware current_velocities, 2- car_info, 3- vehicle status ) "" -->
-	<arg name="vel_odom_topic"				default="/carla/ego_vehicle/odometry" />
+	<arg name="vel_odom_topic"				default="/odometry" />
 	<arg name="vel_curr_topic"				default="/current_velocity" />
 	<arg name="vel_can_topic"				default="/can_info" />
 	<arg name="vehicle_status_topic"		default="/vehicle_status" />

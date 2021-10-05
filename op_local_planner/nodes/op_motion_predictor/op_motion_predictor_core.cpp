@@ -17,18 +17,13 @@
 #include "op_motion_predictor_core.h"
 #include "op_planner/MappingHelpers.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
-#include "op_planner/KmlMapLoader.h"
-#include "op_planner/Lanelet2MapLoader.h"
-#include "op_planner/VectorMapLoader.h"
 
 namespace MotionPredictorNS
 {
 
 MotionPrediction::MotionPrediction()
 {
-	bMap = false;
 	bNewCurrentPos = false;
-	bVehicleStatus = false;
 	bTrackedObjects = false;
 	m_bEnableCurbObstacles = false;
 	m_DistanceBetweenCurbs = 1.0;
@@ -57,26 +52,8 @@ MotionPrediction::MotionPrediction()
 	sub_tracked_objects	= nh.subscribe(m_TrackedObjectsTopicName, 	1,	&MotionPrediction::callbackGetTrackedObjects, 		this);
 	sub_current_pose 	= nh.subscribe("/current_pose", 1,	&MotionPrediction::callbackGetCurrentPose, 		this);
 
-	int bVelSource = 1;
-	_nh.getParam("/op_common_params/velocitySource", bVelSource);
-	std::string velocity_topic;
-	if(bVelSource == 0)
-	{
-		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 1, &MotionPrediction::callbackGetRobotOdom, this);
-	}
-	else if(bVelSource == 1)
-	{
-		sub_current_velocity = nh.subscribe("/current_velocity", 1, &MotionPrediction::callbackGetAutowareStatus, this);
-	}
-	else if(bVelSource == 2)
-	{
-		sub_can_info = nh.subscribe("/can_info", 1, &MotionPrediction::callbackGetCANInfo, this);
-	}
-	else if(bVelSource == 3)
-	{
-		nh.getParam("/op_common_params/vehicle_status_topic", velocity_topic);
-		sub_vehicle_status = nh.subscribe(velocity_topic, 1, &MotionPrediction::callbackGetVehicleStatus, this);
-	}
+	m_VelHandler.InitVelocityHandler(nh, m_CarInfo, &m_VehicleStatus, &m_CurrentPos);
+	m_ParamsHandler.InitHandler(_nh, &m_PlanningParams, &m_CarInfo, &m_ControlParams);
 
 	UtilityHNS::UtilityH::GetTickCount(m_VisualizationTimer);
 	PlannerHNS::ROSHelpers::InitPredMarkers(500, m_PredictedTrajectoriesDummy);
@@ -84,25 +61,8 @@ MotionPrediction::MotionPrediction()
 	PlannerHNS::ROSHelpers::InitPredParticlesMarkers(1000, m_PredictedParticlesDummy);
 	PlannerHNS::ROSHelpers::InitPredParticlesMarkers(2000, m_GeneratedParticlesDummy, true);
 
-	//Mapping Section
-	if(m_MapType == PlannerHNS::MAP_AUTOWARE)
-	{
-		sub_bin_map = nh.subscribe("/lanelet_map_bin", 1, &MotionPrediction::callbackGetLanelet2, this);
-		sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &MotionPrediction::callbackGetVMLanes,  this);
-		sub_points = nh.subscribe("/vector_map_info/point", 1, &MotionPrediction::callbackGetVMPoints,  this);
-		sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &MotionPrediction::callbackGetVMdtLanes,  this);
-		sub_intersect = nh.subscribe("/vector_map_info/cross_road", 1, &MotionPrediction::callbackGetVMIntersections,  this);
-		sup_area = nh.subscribe("/vector_map_info/area", 1, &MotionPrediction::callbackGetVMAreas,  this);
-		sub_lines = nh.subscribe("/vector_map_info/line", 1, &MotionPrediction::callbackGetVMLines,  this);
-		sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &MotionPrediction::callbackGetVMStopLines,  this);
-		sub_signals = nh.subscribe("/vector_map_info/signal", 1, &MotionPrediction::callbackGetVMSignal,  this);
-		sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &MotionPrediction::callbackGetVMVectors,  this);
-		sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &MotionPrediction::callbackGetVMCurbs,  this);
-		sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &MotionPrediction::callbackGetVMRoadEdges,  this);
-		sub_way_areas = nh.subscribe("/vector_map_info/way_area", 1, &MotionPrediction::callbackGetVMWayAreas,  this);
-		sub_cross_walk = nh.subscribe("/vector_map_info/cross_walk", 1, &MotionPrediction::callbackGetVMCrossWalks,  this);
-		sub_nodes = nh.subscribe("/vector_map_info/node", 1, &MotionPrediction::callbackGetVMNodes,  this);
-	}
+	m_MapHandler.InitMapHandler(nh, "/op_common_params/mapSource",
+			"/op_common_params/mapFileName", "/op_common_params/lanelet2_origin");
 
 	std::cout << "OpenPlanner Motion Predictor initialized successfully " << std::endl;
 }
@@ -159,29 +119,6 @@ void MotionPrediction::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/maxDeceleration", m_CarInfo.max_deceleration);
 	m_CarInfo.max_speed_forward = m_PlanningParams.maxSpeed;
 	m_CarInfo.min_speed_forward = m_PlanningParams.minSpeed;
-
-	int iSource = 0;
-	_nh.getParam("/op_common_params/mapSource" , iSource);
-	if(iSource == 0)
-		m_MapType = PlannerHNS::MAP_AUTOWARE;
-	else if (iSource == 1)
-		m_MapType = PlannerHNS::MAP_FOLDER;
-	else if(iSource == 2)
-		m_MapType = PlannerHNS::MAP_KML_FILE;
-	else if(iSource == 3)
-	{
-		m_MapType = PlannerHNS::MAP_LANELET_2;
-		std::string str_origin;
-		nh.getParam("/op_common_params/lanelet2_origin" , str_origin);
-		std::vector<std::string> lat_lon_alt = PlannerHNS::MappingHelpers::SplitString(str_origin, ",");
-		if(lat_lon_alt.size() == 3)
-		{
-			m_Map.origin.pos.lat = atof(lat_lon_alt.at(0).c_str());
-			m_Map.origin.pos.lon = atof(lat_lon_alt.at(1).c_str());
-			m_Map.origin.pos.alt = atof(lat_lon_alt.at(2).c_str());
-		}
-	}
-	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
 
 	_nh.getParam("/op_common_params/objects_input_topic" , m_TrackedObjectsTopicName);
 	if(m_TrackedObjectsTopicName.empty())
@@ -242,42 +179,6 @@ void MotionPrediction::callbackGetCurrentPose(const geometry_msgs::PoseStampedCo
 {
 	m_CurrentPos.pos = PlannerHNS::GPSPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
 	bNewCurrentPos = true;
-}
-
-void MotionPrediction::callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg)
-{
-	m_VehicleStatus.speed = msg->twist.linear.x;
-	m_CurrentPos.v = m_VehicleStatus.speed;
-	if(fabs(msg->twist.linear.x) > 0.25)
-		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/msg->twist.linear.x);
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void MotionPrediction::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg)
-{
-	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_wheel_angle / m_CarInfo.max_steer_value;
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void MotionPrediction::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
-{
-	m_VehicleStatus.speed = msg->twist.twist.linear.x;
-	if(msg->twist.twist.linear.x != 0)
-		m_VehicleStatus.steer += atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void MotionPrediction::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
-{
-	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = -msg->angle*DEG2RAD;
-	m_CurrentPos.v = m_VehicleStatus.speed;
-	bVehicleStatus = true;
-//	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
 }
 
 void MotionPrediction::callbackGetTrackedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg)
@@ -505,7 +406,10 @@ void MotionPrediction::MainLoop()
 	{
 		ros::spinOnce();
 
-		LoadMap();
+		if(!m_MapHandler.IsMapLoaded())
+		{
+			m_MapHandler.LoadMap(m_Map, m_PlanningParams.enableLaneChange);
+		}
 
 //		if(UtilityHNS::UtilityH::GetTimeDiffNow(m_VisualizationTimer) > m_VisualizationTime)
 //		{
@@ -523,149 +427,6 @@ void MotionPrediction::MainLoop()
 
 		loop_rate.sleep();
 	}
-}
-
-//Mapping Section
-
-void MotionPrediction::LoadMap()
-{
-	if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
-	{
-		bMap = true;
-		PlannerHNS::KmlMapLoader kml_loader;
-		kml_loader.LoadKML(m_MapPath, m_Map);
-		PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-	}
-	else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
-	{
-		bMap = true;
-		PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
-		vec_loader.LoadFromFile(m_MapPath, m_Map);
-		PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-	}
-	else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
-	{
-		bMap = true;
-		PlannerHNS::Lanelet2MapLoader map_loader;
-		map_loader.LoadMap(m_MapPath, m_Map);
-		PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-	}
-	else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
-	{
-		if(m_MapRaw.AreMessagesReceived())
-		{
-			bMap = true;
-			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
-			vec_loader.LoadFromData(m_MapRaw, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-		}
-	}
-}
-
-void MotionPrediction::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
-{
-	PlannerHNS::Lanelet2MapLoader map_loader;
-	map_loader.LoadMap(msg, m_Map);
-	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-	bMap = true;
-}
-
-void MotionPrediction::callbackGetVMLanes(const vector_map_msgs::LaneArray& msg)
-{
-	std::cout << "Received Lanes" << endl;
-	if(m_MapRaw.pLanes == nullptr)
-		m_MapRaw.pLanes = new UtilityHNS::AisanLanesFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMPoints(const vector_map_msgs::PointArray& msg)
-{
-	std::cout << "Received Points" << endl;
-	if(m_MapRaw.pPoints  == nullptr)
-		m_MapRaw.pPoints = new UtilityHNS::AisanPointsFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg)
-{
-	std::cout << "Received dtLanes" << endl;
-	if(m_MapRaw.pCenterLines == nullptr)
-		m_MapRaw.pCenterLines = new UtilityHNS::AisanCenterLinesFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMIntersections(const vector_map_msgs::CrossRoadArray& msg)
-{
-	std::cout << "Received CrossRoads" << endl;
-	if(m_MapRaw.pIntersections == nullptr)
-		m_MapRaw.pIntersections = new UtilityHNS::AisanIntersectionFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMAreas(const vector_map_msgs::AreaArray& msg)
-{
-	std::cout << "Received Areas" << endl;
-	if(m_MapRaw.pAreas == nullptr)
-		m_MapRaw.pAreas = new UtilityHNS::AisanAreasFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMLines(const vector_map_msgs::LineArray& msg)
-{
-	std::cout << "Received Lines" << endl;
-	if(m_MapRaw.pLines == nullptr)
-		m_MapRaw.pLines = new UtilityHNS::AisanLinesFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMStopLines(const vector_map_msgs::StopLineArray& msg)
-{
-	std::cout << "Received StopLines" << endl;
-	if(m_MapRaw.pStopLines == nullptr)
-		m_MapRaw.pStopLines = new UtilityHNS::AisanStopLineFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMSignal(const vector_map_msgs::SignalArray& msg)
-{
-	std::cout << "Received Signals" << endl;
-	if(m_MapRaw.pSignals  == nullptr)
-		m_MapRaw.pSignals = new UtilityHNS::AisanSignalFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMVectors(const vector_map_msgs::VectorArray& msg)
-{
-	std::cout << "Received Vectors" << endl;
-	if(m_MapRaw.pVectors  == nullptr)
-		m_MapRaw.pVectors = new UtilityHNS::AisanVectorFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMCurbs(const vector_map_msgs::CurbArray& msg)
-{
-	std::cout << "Received Curbs" << endl;
-	if(m_MapRaw.pCurbs == nullptr)
-		m_MapRaw.pCurbs = new UtilityHNS::AisanCurbFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMRoadEdges(const vector_map_msgs::RoadEdgeArray& msg)
-{
-	std::cout << "Received Edges" << endl;
-	if(m_MapRaw.pRoadedges  == nullptr)
-		m_MapRaw.pRoadedges = new UtilityHNS::AisanRoadEdgeFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg)
-{
-	std::cout << "Received Wayareas" << endl;
-	if(m_MapRaw.pWayAreas  == nullptr)
-		m_MapRaw.pWayAreas = new UtilityHNS::AisanWayareaFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg)
-{
-	std::cout << "Received CrossWalks" << endl;
-	if(m_MapRaw.pCrossWalks == nullptr)
-		m_MapRaw.pCrossWalks = new UtilityHNS::AisanCrossWalkFileReader(msg);
-}
-
-void MotionPrediction::callbackGetVMNodes(const vector_map_msgs::NodeArray& msg)
-{
-	std::cout << "Received Nodes" << endl;
-	if(m_MapRaw.pNodes == nullptr)
-		m_MapRaw.pNodes = new UtilityHNS::AisanNodesFileReader(msg);
 }
 
 }

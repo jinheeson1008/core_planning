@@ -18,18 +18,16 @@
 #define OP_TRAJECTORY_GENERATOR_CORE
 
 #include <ros/ros.h>
-#include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseArray.h>
-#include <nav_msgs/Odometry.h>
 #include <autoware_msgs/LaneArray.h>
-#include <autoware_msgs/VehicleStatus.h>
-#include <autoware_can_msgs/CANInfo.h>
 
 #include "op_planner/PlannerH.h"
 #include "op_planner/PlannerCommonDef.h"
+#include "op_ros_helpers/ROSVelocityHandler.h"
+#include "op_ros_helpers/op_ParamsHandler.h"
 
 namespace TrajectoryGeneratorNS
 {
@@ -74,6 +72,8 @@ protected:
   	double m_SteeringDelay;
   	double m_MinPursuitDistance;
   	bool m_bEnableForwardSimulation;
+  	PlannerHNS::VelocityHandler m_VelHandler;
+  	PlannerHNS::ParamsHandler m_ParamsHandler;
 
   	//ROS messages (topics)
 	ros::NodeHandle nh;
@@ -86,20 +86,11 @@ protected:
 	// define subscribers.
 	ros::Subscriber sub_initialpose;
 	ros::Subscriber sub_current_pose;
-	ros::Subscriber sub_current_velocity;
-	ros::Subscriber sub_robot_odom;
-	ros::Subscriber sub_vehicle_status;
-	ros::Subscriber sub_can_info;
 	ros::Subscriber sub_GlobalPlannerPaths;
-
 
 	// Callback function for subscriber.
 	void callbackGetInitPose(const geometry_msgs::PoseWithCovarianceStampedConstPtr &input);
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-	void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
-	void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
-	void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
-	void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
 	void callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg);
 
 	//Helper Functions

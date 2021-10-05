@@ -58,23 +58,7 @@ WaypointFollower::WaypointFollower()
 		pub_VehicleCommandOP = _nh.advertise<autoware_msgs::VehicleCmd>("op_controller_cmd", 1);
 	}
 
-
-	if(m_iVelSource == 0)
-	{
-		sub_robot_odom = _nh.subscribe(m_Topics.velocity_source_topic_name, 1, &WaypointFollower::callbackGetRobotOdom, this);
-	}
-	else if(m_iVelSource == 1)
-	{
-		sub_current_velocity = _nh.subscribe(m_Topics.velocity_source_topic_name, 1, &WaypointFollower::callbackGetAutowareStatus, this);
-	}
-	else if(m_iVelSource == 2)
-	{
-		sub_can_info = _nh.subscribe(m_Topics.velocity_source_topic_name, 1, &WaypointFollower::callbackGetCANInfo, this);
-	}
-	else if(m_iVelSource == 3)
-	{
-		sub_vehicle_status = _nh.subscribe(m_Topics.velocity_source_topic_name, 1, &WaypointFollower::callbackGetVehicleStatus, this);
-	}
+	m_VelHandler.InitVelocityHandler(_nh, m_CarInfo, &m_CurrVehicleStatus, &m_CurrentPos);
 
 	std::cout << "op_waypoint_follower initialized successfully " << std::endl;
 }
@@ -93,25 +77,6 @@ void WaypointFollower::ReadParamFromLaunchFile(ros::NodeHandle& nh)
 	nh.getParam("/op_common_params/steeringDelay", m_ControlParams.SteeringDelay);
 	nh.getParam("/op_common_params/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
 	nh.getParam("/op_common_params/pathDensity", m_ControllerHyperParams.path_density);
-
-	nh.getParam("/op_common_params/velocitySource", m_iVelSource);
-	std::string velocity_topic;
-	if(m_iVelSource == 0)
-	{
-		nh.getParam("/op_common_params/vel_odom_topic", m_Topics.velocity_source_topic_name);
-	}
-	else if(m_iVelSource == 1)
-	{
-		nh.getParam("/op_common_params/vel_curr_topic", m_Topics.velocity_source_topic_name);
-	}
-	else if(m_iVelSource == 2)
-	{
-		nh.getParam("/op_common_params/vel_can_topic", m_Topics.velocity_source_topic_name);
-	}
-	else if(m_iVelSource == 3)
-	{
-		nh.getParam("/op_common_params/vehicle_status_topic", m_Topics.velocity_source_topic_name);
-	}
 
 	int steering_mode = 0;
 	int drive_mode = 0;
@@ -234,51 +199,6 @@ void WaypointFollower::callbackGetCurrentPose(const geometry_msgs::PoseStampedCo
 {
 	m_CurrentPos.pos = PlannerHNS::GPSPoint(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, tf::getYaw(msg->pose.orientation));
 	bNewCurrentPos = true;
-}
-
-void WaypointFollower::callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg)
-{
-	m_CurrVehicleStatus.speed = msg->twist.linear.x;
-	m_CurrentPos.v = m_CurrVehicleStatus.speed;
-
-	if(fabs(m_CurrentPos.v) > 0.1)
-	{
-		m_CurrVehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/m_CurrentPos.v);
-	}
-
-	UtilityHNS::UtilityH::GetTickCount(m_CurrVehicleStatus.tStamp);
-}
-
-void WaypointFollower::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg)
-{
-	m_CurrVehicleStatus.speed = msg->speed/3.6;
-	m_CurrentPos.v = m_CurrVehicleStatus.speed;
-	m_CurrVehicleStatus.steer = msg->angle * m_CarInfo.max_wheel_angle / m_CarInfo.max_steer_value;
-	UtilityHNS::UtilityH::GetTickCount(m_CurrVehicleStatus.tStamp);
-
-	std::cout << "Velocity From CAN: " << m_CurrVehicleStatus.speed << std::endl;
-}
-
-void WaypointFollower::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
-{
-	m_CurrVehicleStatus.speed = msg->twist.twist.linear.x;
-	m_CurrentPos.v = m_CurrVehicleStatus.speed ;
-	if(msg->twist.twist.linear.x != 0)
-	{
-		m_CurrVehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
-	}
-	UtilityHNS::UtilityH::GetTickCount(m_CurrVehicleStatus.tStamp);
-
-	std::cout << "Velocity From Odometer: " << m_CurrVehicleStatus.speed << std::endl;
-}
-
-void WaypointFollower::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
-{
-	m_CurrVehicleStatus.speed = msg->speed/3.6;
-	m_CurrVehicleStatus.steer = -msg->angle*DEG2RAD;
-	m_CurrentPos.v = m_CurrVehicleStatus.speed;
-
-	//std::cout << "Velocity From Vehicle Status : " << m_CurrVehicleStatus.speed << std::endl;
 }
 
 void WaypointFollower::callbackGetBehaviorState(const autoware_msgs::WaypointConstPtr& msg)
