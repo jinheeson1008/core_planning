@@ -836,7 +836,7 @@ void GlobalPlanner::MainLoop()
 			if(m_MapHandler.IsMapLoaded())
 			{
 				visualization_msgs::MarkerArray map_marker_array;
-				PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
+				PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array, false);
 				pub_MapRviz.publish(map_marker_array);
 			}
 		}

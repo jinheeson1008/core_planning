@@ -2,7 +2,7 @@
 	<!-- Trajectory Evaluation Specific Parameters -->
 	
 	<arg name="enablePrediction" default="false" />	 				 		
-	<arg name="keepCurrentTrajectory" default="false" />
+	<arg name="keepCurrentTrajectory" default="true" />
 	
 	<!-- all weights sum must equal 1 -->
 	<!-- ............................ -->

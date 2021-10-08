@@ -247,7 +247,7 @@ void TrajectoryGen::GenerateSmoothTrajectory(const std::vector<std::vector<std::
 			path_out.clear();
 			PlannerHNS::PlannerH traj_planner;
 			traj_planner.GenerateKinematicallyFeasibleTrajectory(m_VehicleStatus, m_CurrentPos, m_CarInfo,
-					m_SteeringDelay, m_PlanningParams.pathDensity, m_MinPursuitDistance, m_CarInfo.max_speed_forward, path, path_out, true);
+					m_SteeringDelay, m_PlanningParams.pathDensity, m_MinPursuitDistance, m_CarInfo.max_speed_forward, path, path_out, false);
 			road_out.push_back(path_out);
 			if(path_out.size() < min_size)
 			{
