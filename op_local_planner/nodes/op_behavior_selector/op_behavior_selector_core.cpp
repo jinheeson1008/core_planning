@@ -18,6 +18,7 @@
 #include "op_ros_helpers/op_ROSHelpers.h"
 #include "op_planner/MappingHelpers.h"
 #include "op_planner/KmlMapLoader.h"
+#include "op_planner/OpenDriveMapLoader.h"
 #include "op_planner/Lanelet2MapLoader.h"
 #include "op_planner/VectorMapLoader.h"
 
@@ -155,7 +156,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	m_ControlParams.Steering_Gain = PlannerHNS::PID_CONST(0.07, 0.02, 0.01);
 	m_ControlParams.Velocity_Gain = PlannerHNS::PID_CONST(0.1, 0.005, 0.1);
-	m_ControlParams.min_safe_follow_distance = m_PlanningParams.minDistanceToAvoid;
+	m_ControlParams.min_safe_follow_distance = m_PlanningParams.additionalBrakingDistance;
 	_nh.getParam("/op_common_params/steeringDelay", m_ControlParams.SteeringDelay);
 	_nh.getParam("/op_common_params/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
 
@@ -808,21 +809,21 @@ void BehaviorGen::MainLoop()
 			}
 
 			//Increase the number of roll out if the vehicle is stopped behind another vehicle for long time 
-			if(m_CurrentBehavior.state == PlannerHNS::FOLLOW_STATE)
-			{
-				if(m_VehicleStatus.speed > 0.1)
-				{
-					UtilityHNS::UtilityH::GetTickCount(m_TimeSinceLastChange);
-				}
-				else if(UtilityHNS::UtilityH::GetTimeDiffNow(m_TimeSinceLastChange) > 15)
-				{
-					m_ParamsHandler.UpdateRolloutsNumber(10);
-				}
-			}
-			else
-			{
-				UtilityHNS::UtilityH::GetTickCount(m_TimeSinceLastChange);
-			}
+//			if(m_CurrentBehavior.state == PlannerHNS::FOLLOW_STATE)
+//			{
+//				if(m_VehicleStatus.speed > 0.1)
+//				{
+//					UtilityHNS::UtilityH::GetTickCount(m_TimeSinceLastChange);
+//				}
+//				else if(UtilityHNS::UtilityH::GetTimeDiffNow(m_TimeSinceLastChange) > 15)
+//				{
+//					m_ParamsHandler.UpdateRolloutsNumber(10);
+//				}
+//			}
+//			else
+//			{
+//				UtilityHNS::UtilityH::GetTickCount(m_TimeSinceLastChange);
+//			}
 
 
 			SendLocalPlanningTopics();

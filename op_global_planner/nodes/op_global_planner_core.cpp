@@ -17,6 +17,7 @@
 #include "op_global_planner_core.h"
 #include "op_ros_helpers/op_ROSHelpers.h"
 #include "op_planner/KmlMapLoader.h"
+#include "op_planner/OpenDriveMapLoader.h"
 #include "op_planner/Lanelet2MapLoader.h"
 #include "op_planner/VectorMapLoader.h"
 
