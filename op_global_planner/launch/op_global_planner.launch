@@ -1,6 +1,6 @@
 <!-- -->
 <launch>
-	<arg name="pathDensity" 					default="0.75" /> <!-- distance between each two waypoints-->
+	<arg name="pathDensity" 					default="1.0" /> <!-- distance between each two waypoints-->
 	<arg name="enableSmoothing" 				default="true" /> 
 	<arg name="enableLaneChange" 				default="false" /> 
 	<arg name="enableRvizInput" 				default="false" /> 
@@ -17,6 +17,8 @@
 	<arg name="mapFileName" 					default="" /> <!-- incase of kml map source -->
 	<arg name="lanelet2_origin"					default="0,0,0" /> <!-- GPS origin for lanelet2 map files, Lat, Long, Alt  --> 	
 	<arg name="destinationFileName" 			default="" />	
+	<arg name="external_waypoints_topic" 		default="" />	<!-- if topic name is assigned, global planner will wait for the external path, not global path will be generated -->	
+	<arg name="enableExploreMode" 				default="false" />	<!-- if true, the external waypoints will not be used, the new global plan will be generated randomly and replanning will be enabled, and lane change will be disabled -->
 	
 <node pkg="op_global_planner" type="op_global_planner" name="op_global_planner" output="screen">
 		
@@ -37,6 +39,8 @@
 		<param name="mapFileName" 				value="$(arg mapFileName)" />
 		<param name="lanelet2_origin" 			value="$(arg lanelet2_origin)" />		
 		<param name="destinationFileName" 		value="$(arg destinationFileName)" />
+		<param name="external_waypoints_topic" 	value="$(arg external_waypoints_topic)" />		
+		<param name="enableExploreMode" 		value="$(arg enableExploreMode)" />
 			    
 	</node> 
 	

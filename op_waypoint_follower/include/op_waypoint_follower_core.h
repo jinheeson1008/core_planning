@@ -79,6 +79,7 @@ protected:
 	ros::Publisher pub_FollowPointRviz;
 	ros::Publisher pub_VelocityRviz;
 	ros::Publisher pub_VehicleCommandOP;
+	ros::Publisher pub_CarlaVehicleCommandOP;
 
 	// define subscribers.
 	ros::Subscriber sub_initialpose;

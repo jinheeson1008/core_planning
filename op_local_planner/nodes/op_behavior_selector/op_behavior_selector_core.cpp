@@ -283,7 +283,7 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 			{
 				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
 				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.4, 0.4, 0.05);
-				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
+				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
 				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
 
 #ifdef LOG_LOCAL_PLANNING_DATA
@@ -556,11 +556,12 @@ void BehaviorGen::VisualizeLocalPlanner()
 	pub_ActualSpeedRviz.publish(target_speed);
 
 	visualization_msgs::MarkerArray selected_path;
-	pub_SelectedPathRviz.publish(selected_path);
+	//pub_SelectedPathRviz.publish(selected_path);
 	std::vector<PlannerHNS::WayPoint> path = m_BehaviorGenerator.m_Path;
-	PlannerHNS::PlanningHelpers::FixPathDensity(path, 1.5);
-	PlannerHNS::PlanningHelpers::CalcAngleAndCost(path);
-	PlannerHNS::ROSHelpers::TrajectorySelectedToCircles(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path, 1);
+	PlannerHNS::ROSHelpers::TrajectorySelectedToMarkers(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path);
+	//PlannerHNS::PlanningHelpers::FixPathDensity(path, 1.5);
+	//PlannerHNS::PlanningHelpers::CalcAngleAndCost(path);
+	//PlannerHNS::ROSHelpers::TrajectorySelectedToCircles(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path, 1);
 	pub_SelectedPathRviz.publish(selected_path);
 
 	//To Test Synchronization Problem
