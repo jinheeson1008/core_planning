@@ -1003,8 +1003,7 @@ void GlobalPlanner::MainLoop()
 			}
 			else
 			{
-				bMakeNewPlan = UpdateGoalIndex();
-				std::cout << "Goal Index Updated: " << m_iCurrentGoalIndex << ", New Plan: " << bMakeNewPlan << std::endl;
+				bMakeNewPlan = UpdateGoalIndex();				
 			}
 
 			if(m_iCurrentGoalIndex >= 0 && (m_bReplanSignal || bMakeNewPlan || m_GeneratedTotalPaths.size() == 0))
