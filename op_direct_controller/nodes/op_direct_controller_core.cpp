@@ -177,7 +177,12 @@ void DirectController::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& ms
 {
 	m_VehicleStatus.speed = msg->twist.twist.linear.x;
 	m_CurrentPos.v = m_VehicleStatus.speed ;
-	if(msg->twist.twist.linear.x != 0)
+	if(msg->twist.twist.linear.z >= 1 && msg->twist.twist.angular.x >= 1) // special flags send with Odometry message which means steering is not angular velocity, it is direct steering angle in degrees.
+	{
+		m_VehicleStatus.steer = msg->twist.twist.angular.z;
+		//std::cout << "Receive Odometry in direct controller, Speed: " << m_VehicleStatus.speed <<", Steer: " << m_VehicleStatus.steer << std::endl;
+	}
+	else if(msg->twist.twist.linear.x != 0)
 	{
 		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
 	}

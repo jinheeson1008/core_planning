@@ -40,6 +40,9 @@ GlobalPlanner::GlobalPlanner()
 	m_bReplanSignal = false;
 	m_GlobalPathID = 1;
 	m_bStart = false;
+	m_bUseExternalPath = false;
+	m_bExploreMode = false;
+
 	UtilityHNS::UtilityH::GetTickCount(m_WaitingTimer);
 	UtilityHNS::UtilityH::GetTickCount(m_ReplanningTimer);
 
@@ -78,6 +81,13 @@ GlobalPlanner::GlobalPlanner()
 		LoadDestinations(m_params.destinationsFile);
 	}
 
+	nh.getParam("/op_global_planner/enableExploreMode", m_bExploreMode);
+	if(m_bExploreMode)
+	{
+		m_params.bEnableLaneChange = false;
+		m_params.bEnableReplanning = true;
+		m_params.bEnableRvizInput = false;
+	}
 
 	if(m_params.bEnableRvizInput)
 	{
@@ -87,6 +97,17 @@ GlobalPlanner::GlobalPlanner()
 	else
 	{
 		LoadSimulationData();
+	}
+
+	if(!m_bExploreMode)
+	{
+		std::string external_waypoints_topic;
+		nh.getParam("/op_global_planner/external_waypoints_topic", external_waypoints_topic);
+		if(external_waypoints_topic.size() > 0)
+		{
+			m_bUseExternalPath = true;
+			sub_external_path = nh.subscribe(external_waypoints_topic, 10, &GlobalPlanner::ExternalPathCallBack, this);
+		}
 	}
 
 	sub_v2x_obstacles = nh.subscribe("/op_v2x_replanning_signal", 1, &GlobalPlanner::callbackGetV2XReplanSignal, this);
@@ -219,6 +240,102 @@ bool GlobalPlanner::UpdateGoalWithHMI()
 	return false;
 }
 
+void GlobalPlanner::ExternalPathCallBack(const nav_msgs::PathConstPtr& msg)
+{
+	if(m_ExternalGeneratedTotalPaths.size() > 0 || !m_MapHandler.IsMapLoaded()) return; // we only receive once path from external source , and we need a map
+
+	std::cout << " ----------------------------------------------------- " << std::endl;
+	std::cout << "Received Path From external source  !! " << msg->poses.size() << std::endl;
+	std::cout << " ----------------------------------------------------- " << std::endl;
+	std::vector<PlannerHNS::WayPoint>  temp_path;
+	std::vector<PlannerHNS::WayPoint>  data_path;
+	std::vector<PlannerHNS::WayPoint>  original_map_path;
+
+	for(auto& p : msg->poses)
+	{
+		PlannerHNS::WayPoint wp(p.pose.position.x, p.pose.position.y, p.pose.position.z, 0);
+		temp_path.push_back(wp);
+	}
+
+	m_GoalsPos.clear();
+	m_GoalsPos.push_back(temp_path.at(temp_path.size()-1));
+
+	std::vector<PlannerHNS::WayPoint*> waypoints_list;
+	PlannerHNS::WayPoint* p_prev_wp = nullptr;
+	for(auto& p : temp_path)
+	{
+		std::vector<PlannerHNS::WayPoint*> p_wps = PlannerHNS::MappingHelpers::GetClosestWaypointsFromMapUsingDistanceOnly(p, m_Map, 1.0);
+		PlannerHNS::PlanningHelpers::FilterWaypoints(p_wps, p_prev_wp);
+
+		if(p_wps.size() > 0)
+		{
+			std::cout << " ----------------------------------------------------- " << std::endl;
+			 std::cout << " Waypoint: " << waypoints_list.size() << ", Number Found: " << p_wps.size() << std::endl;
+			 std::cout << " ----------------------------------------------------- " << std::endl;
+			if(p_wps.at(0) != nullptr)
+			{
+				p_prev_wp = p_wps.at(0);
+				waypoints_list.push_back(p_prev_wp);
+				original_map_path.push_back(*p_prev_wp);
+			}
+		}
+	}
+
+	PlannerHNS::WayPoint* pWP1 = nullptr;
+
+	if(waypoints_list.size() > 0)
+	{
+		pWP1 = waypoints_list.at(0); // get first element
+		waypoints_list.erase(waypoints_list.begin()+0); // remove first element from the list
+	}
+
+	while(waypoints_list.size() > 0)
+	{
+		PlannerHNS::WayPoint*  pWP2 = waypoints_list.at(0); // get first element
+		waypoints_list.erase(waypoints_list.begin()+0); // remove first element from the list
+
+		if(PlannerHNS::PlanningHelpers::CheckLeftLane(pWP2, pWP1) || PlannerHNS::PlanningHelpers::CheckRightLane(pWP2, pWP1))
+		{
+			data_path.push_back(*pWP2);
+			 std::cout << " ----------------------------------------------------- " << std::endl;
+			 std::cout << "Lane Change Case !! " << std::endl;
+			 std::cout << " ----------------------------------------------------- " << std::endl;
+		}
+		else if(PlannerHNS::PlanningHelpers::CheckFrontLane(pWP1, pWP2, 4))
+		{
+			std::vector<int> predefinedLanesIds;
+			std::vector<std::vector<PlannerHNS::WayPoint> > generatedTotalPaths;
+			m_PlannerH.PlanUsingDP(*pWP1, *pWP2, MAX_GLOBAL_PLAN_SEARCH_DISTANCE, 5, false, predefinedLanesIds, m_Map, generatedTotalPaths);
+
+			if(generatedTotalPaths.size() == 0) continue;
+
+			std::cout << " ----------------------------------------------------- " << std::endl;
+			std::cout << "Straight Planning Case !! " <<  generatedTotalPaths .size() << std::endl;
+			std::cout << " ----------------------------------------------------- " << std::endl;
+
+			if(generatedTotalPaths.size() > 0)
+			{
+				data_path.insert(data_path.end(), generatedTotalPaths.at(0).begin(), generatedTotalPaths.at(0).end());
+			}
+		}
+		else
+		{
+			data_path.push_back(*pWP2);
+			std::cout << " ----------------------------------------------------- " << std::endl;
+			std::cout << "Unknown Planning Case !! " << std::endl;
+			std::cout << " ----------------------------------------------------- " << std::endl;
+		}
+
+		pWP1 = pWP2;
+	}
+
+	m_ExternalGeneratedTotalPaths.push_back(data_path);
+	m_ExternalOriginalWaypoints = original_map_path;
+
+	PlannerHNS::WayPoint p_start, p_end;
+	PostGlobalPathGeneration(p_start, p_end, m_ExternalGeneratedTotalPaths);
+}
+
 void GlobalPlanner::callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg)
 {
 	m_bReplanSignal = msg->data;
@@ -310,7 +427,7 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 		}
 
 		std::vector<int> predefinedLanesIds;
-		double ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint,
+		ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint,
 				MAX_GLOBAL_PLAN_SEARCH_DISTANCE, planning_distance, m_params.bEnableLaneChange, predefinedLanesIds,
 				m_Map, generatedTotalPaths, &m_PlanningVisualizeTree);
 
@@ -336,6 +453,12 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 			generatedTotalPaths.clear();
 			ret = m_PlannerH.PlanUsingDPRandom(startPoint, 20, m_Map, generatedTotalPaths);
 		}
+		else if(m_bExploreMode)
+		{
+			std::cout << "Generating Random Trajectories ..  " << std::endl;
+			generatedTotalPaths.clear();
+			ret = m_PlannerH.PlanUsingDPRandom(m_CurrentPose, 250, m_Map, generatedTotalPaths);
+		}
 		else
 		{
 			ret = m_PlannerH.PlanUsingDP(startPoint, goalPoint, MAX_GLOBAL_PLAN_SEARCH_DISTANCE, planning_distance,  m_params.bEnableLaneChange, predefinedLanesIds, m_Map, generatedTotalPaths);
@@ -350,6 +473,11 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 	}
 
 
+	return PostGlobalPathGeneration(startPoint, goalPoint, generatedTotalPaths);
+}
+
+bool GlobalPlanner::PostGlobalPathGeneration(PlannerHNS::WayPoint& startPoint, PlannerHNS::WayPoint& goalPoint, std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths)
+{
 	if(generatedTotalPaths.size() > 0 && generatedTotalPaths.at(0).size()>0)
 	{
 		if(m_params.bEnableSmoothing)
@@ -397,6 +525,7 @@ bool GlobalPlanner::GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, Planner
 	{
 		std::cout << "Can't Generate Global Path for Start (" << startPoint.pos.ToString() << ") and Goal (" << goalPoint.pos.ToString() << ")" << std::endl;
 	}
+
 	return false;
 }
 
@@ -836,12 +965,23 @@ void GlobalPlanner::MainLoop()
 			if(m_MapHandler.IsMapLoaded())
 			{
 				visualization_msgs::MarkerArray map_marker_array;
-				PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array, false);
+				PlannerHNS::ROSHelpers::ConvertFromRoadNetworkToAutowareVisualizeMapFormat(m_Map, map_marker_array);
 				pub_MapRviz.publish(map_marker_array);
 			}
 		}
 
-		if(m_bStart && m_MapHandler.IsMapLoaded() && m_GoalsPos.size() > 0)
+		if(m_bUseExternalPath)
+		{
+			if(m_MapHandler.IsMapLoaded() && m_ExternalGeneratedTotalPaths.size() > 0)
+			{
+				if(m_GeneratedTotalPaths.size() == 0)
+				{
+					m_GeneratedTotalPaths = m_ExternalGeneratedTotalPaths;
+					VisualizeAndSend(m_GeneratedTotalPaths);
+				}
+			}
+		}
+		else if(m_bStart && m_MapHandler.IsMapLoaded() && m_GoalsPos.size() > 0)
 		{
 			bool bMakeNewPlan = false;
 			bool bDestinationReachSend= false;
@@ -857,10 +997,13 @@ void GlobalPlanner::MainLoop()
 				SendAvailableOptionsHMI();
 				bMakeNewPlan = UpdateGoalWithHMI();
 			}
+			else if(m_bExploreMode && m_bWaitingState)
+			{
+				bMakeNewPlan = true;
+			}
 			else
 			{
-				bMakeNewPlan = UpdateGoalIndex();
-				//std::cout << "Goal Index Updated: " << m_iCurrentGoalIndex << ", New Plan: " << bMakeNewPlan << std::endl;
+				bMakeNewPlan = UpdateGoalIndex();				
 			}
 
 			if(m_iCurrentGoalIndex >= 0 && (m_bReplanSignal || bMakeNewPlan || m_GeneratedTotalPaths.size() == 0))

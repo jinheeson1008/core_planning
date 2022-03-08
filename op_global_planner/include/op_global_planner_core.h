@@ -31,6 +31,7 @@
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <tf/tf.h>
+#include <nav_msgs/Path.h>
 
 #include <std_msgs/Int8.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -108,6 +109,8 @@ protected:
 	bool m_bReplanSignal;
 	std::vector<std::pair<std::vector<PlannerHNS::WayPoint*> , timespec> > m_ModifiedMapItemsTimes;
 	int m_ClearCostTime; // in seconds
+	bool m_bUseExternalPath;
+	bool m_bExploreMode;
 
 	PlannerHNS::WayPoint m_PreviousPlanningPose;
 	PlannerHNS::VelocityHandler m_VelHandler;
@@ -126,6 +129,7 @@ protected:
 	ros::Subscriber sub_current_pose;
 	ros::Subscriber sub_hmi_mission;
 	ros::Subscriber sub_v2x_obstacles;
+	ros::Subscriber sub_external_path;
 
 public:
 	GlobalPlanner();
@@ -141,6 +145,7 @@ private:
   void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
   void callbackGetReplanSignal(const std_msgs::BoolConstPtr& msg);
   void callbackGetV2XReplanSignal(const geometry_msgs::PoseArrayConstPtr& msg);
+  void ExternalPathCallBack(const nav_msgs::PathConstPtr& msg);
   /**
    * @brief Communication between Global Planner and HMI bridge
    * @param msg
@@ -151,8 +156,11 @@ private:
   	PlannerHNS::RoadNetwork m_Map;
   	PlannerHNS::PlannerH m_PlannerH;
   	std::vector<std::vector<PlannerHNS::WayPoint> > m_GeneratedTotalPaths;
+	std::vector<std::vector<PlannerHNS::WayPoint> > m_ExternalGeneratedTotalPaths;
+	std::vector<PlannerHNS::WayPoint> m_ExternalOriginalWaypoints;
 
   	bool GenerateGlobalPlan(PlannerHNS::WayPoint& startPoint, PlannerHNS::WayPoint& goalPoint, std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths);
+  	bool PostGlobalPathGeneration(PlannerHNS::WayPoint& startPoint, PlannerHNS::WayPoint& goalPoint, std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths);
   	void VisualizeAndSend(const std::vector<std::vector<PlannerHNS::WayPoint> >& generatedTotalPaths);
   	void VisualizeDestinations(std::vector<PlannerHNS::WayPoint>& destinations, const int& iSelected);
   	void SaveSimulationData();

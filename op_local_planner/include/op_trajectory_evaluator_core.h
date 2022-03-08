@@ -61,6 +61,7 @@ protected:
 	std::vector<std::vector<PlannerHNS::WayPoint> > m_GlobalPathSections;
 	std::vector<int> m_prev_index;
 	std::vector<PlannerHNS::WayPoint> t_centerTrajectorySmoothed;
+	bool bEnableSmoothGlobalPathForCARLA;
 	std::vector<std::vector<std::vector<PlannerHNS::WayPoint> > > m_LanesRollOutsToUse;
 
 	std::vector<PlannerHNS::DetectedObject> m_PredictedObjects;

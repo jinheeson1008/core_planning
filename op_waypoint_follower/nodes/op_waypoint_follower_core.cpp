@@ -56,6 +56,7 @@ WaypointFollower::WaypointFollower()
 	else if(m_iSimulationMode == 2) // direct command
 	{
 		pub_VehicleCommandOP = _nh.advertise<autoware_msgs::VehicleCmd>("op_controller_cmd", 1);
+		pub_CarlaVehicleCommandOP = _nh.advertise<geometry_msgs::TwistStamped>("carla_op_controller_cmd", 1);
 	}
 
 	m_VelHandler.InitVelocityHandler(_nh, m_CarInfo, &m_CurrVehicleStatus, &m_CurrentPos);
@@ -420,6 +421,14 @@ void WaypointFollower::PathFollowingStep(double dt)
 		}
 		
 		pub_VehicleCommandOP.publish(cmd);
+
+		geometry_msgs::TwistStamped carla_cmd;		 
+		carla_cmd.header.stamp = ros::Time::now();
+		carla_cmd.twist.linear.x = cmd.accel_cmd.accel;
+		carla_cmd.twist.linear.y = cmd.brake_cmd.brake;
+		carla_cmd.twist.angular.z = cmd.steer_cmd.steer;
+		pub_CarlaVehicleCommandOP.publish(carla_cmd);
+
 	}
 }
 

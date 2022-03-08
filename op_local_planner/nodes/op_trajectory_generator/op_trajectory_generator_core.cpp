@@ -27,6 +27,8 @@ TrajectoryGen::TrajectoryGen()
 	bNewCurrentPos = false;
 	bVehicleStatus = false;
 	bWayGlobalPath = false;
+	bEnableSmoothGlobalPathForCARLA = false;
+	bEnableVisualizeGlobalPathForCARLA = false;
 	bFrontAxelStart = false;
 	m_SteeringDelay = 0;
 	m_MinPursuitDistance = 0;
@@ -42,6 +44,7 @@ TrajectoryGen::TrajectoryGen()
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
 
+	pub_PathsRviz = nh.advertise<visualization_msgs::MarkerArray>("global_waypoints_rviz", 1, true);
 	pub_LocalTrajectories = nh.advertise<autoware_msgs::LaneArray>("local_trajectories", 1);
 	pub_LocalTrajectoriesRviz = nh.advertise<visualization_msgs::MarkerArray>("local_trajectories_gen_rviz", 1);
 
@@ -215,11 +218,28 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 
 		if(!bOldGlobalPath)
 		{
-			m_prev_index.clear();
-			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+			if(bEnableSmoothGlobalPathForCARLA)
 			{
-				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
-				m_prev_index.push_back(0);
+				m_prev_index.clear();
+				for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+				{
+					PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.48, 0.2, 0.05); // this line could slow things , if new global path is generated frequently. only for carla
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+					m_prev_index.push_back(0);
+				}
+			}
+			else
+			{
+				m_prev_index.clear();
+				for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
+				{
+					PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
+					m_prev_index.push_back(0);		
+				}
 			}
 
 			bWayGlobalPath = true;
@@ -228,6 +248,30 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 		else
 		{
 			m_GlobalPaths.clear();
+		}
+
+
+		if(bEnableVisualizeGlobalPathForCARLA)
+		{
+			autoware_msgs::LaneArray lane_array;
+			visualization_msgs::MarkerArray pathsToVisualize;
+
+			for(unsigned int i=0; i < m_GlobalPaths.size(); i++)
+			{
+				autoware_msgs::Lane lane;
+				PlannerHNS::ROSHelpers::ConvertFromLocalLaneToAutowareLane(m_GlobalPaths.at(i), lane);
+				lane_array.lanes.push_back(lane);
+			}
+
+			std_msgs::ColorRGBA total_color;
+			total_color.r = 0;
+			total_color.g = 0.7;
+			total_color.b = 1.0;
+			total_color.a = 0.6;
+			PlannerHNS::ROSHelpers::createGlobalLaneArrayMarker(total_color, lane_array, pathsToVisualize);
+			PlannerHNS::ROSHelpers::createGlobalLaneArrayOrientationMarker(lane_array, pathsToVisualize);
+			PlannerHNS::ROSHelpers::createGlobalLaneArrayVelocityMarker(lane_array, pathsToVisualize);
+			pub_PathsRviz.publish(pathsToVisualize);
 		}
 	}
 }
