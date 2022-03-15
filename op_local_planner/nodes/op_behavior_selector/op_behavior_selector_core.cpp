@@ -18,6 +18,7 @@
 #include "op_ros_helpers/op_ROSHelpers.h"
 #include "op_planner/MappingHelpers.h"
 #include "op_planner/KmlMapLoader.h"
+#include "op_planner/OpenDriveMapLoader.h"
 #include "op_planner/Lanelet2MapLoader.h"
 #include "op_planner/VectorMapLoader.h"
 
@@ -28,11 +29,9 @@ BehaviorGen::BehaviorGen()
 {
 	m_ControlFrequency = 50;
 	bNewCurrentPos = false;
-	bVehicleStatus = false;
 	bNewLightStatus = false;
 	bNewLightSignal = false;
 	bBestCost = false;
-	bMap = false;
 	m_bRequestNewPlanSent = false;
 	m_bShowActualDrivingPath = false;
 
@@ -81,48 +80,14 @@ BehaviorGen::BehaviorGen()
 	sub_twist_raw = nh.subscribe("/twist_raw", 1, &BehaviorGen::callbackGetTwistRaw, this);
 	sub_twist_cmd = nh.subscribe("/twist_cmd", 1, &BehaviorGen::callbackGetTwistCMD, this);
 	//sub_ctrl_cmd = nh.subscribe("/ctrl_cmd", 1, &BehaviorGen::callbackGetCommandCMD, this);
-	int bVelSource = 1;
-	_nh.getParam("/op_common_params/velocitySource", bVelSource);
-	std::string velocity_topic;
-	if(bVelSource == 0)
-	{
-		sub_robot_odom = nh.subscribe("/carla/ego_vehicle/odometry", 1, &BehaviorGen::callbackGetRobotOdom, this);
-	}
-	else if(bVelSource == 1)
-	{
-		sub_current_velocity = nh.subscribe("/current_velocity", 1, &BehaviorGen::callbackGetAutowareStatus, this);
-	}
-	else if(bVelSource == 2)
-	{
-		sub_can_info = nh.subscribe("/can_info", 1, &BehaviorGen::callbackGetCANInfo, this);
-	}
-	else if(bVelSource == 3)
-	{
-		_nh.getParam("/op_common_params/vehicle_status_topic", velocity_topic);
-		sub_vehicle_status = _nh.subscribe(velocity_topic, 1, &BehaviorGen::callbackGetVehicleStatus, this);
-	}
+	m_VelHandler.InitVelocityHandler(nh, m_CarInfo, &m_VehicleStatus, &m_CurrentPos);
 	//----------------------------
 
+	m_ParamsHandler.InitHandler(_nh, &m_PlanningParams, &m_CarInfo, &m_ControlParams);
 
 	//Mapping Section
-	if(m_MapType == PlannerHNS::MAP_AUTOWARE)
-	{
-		sub_bin_map = nh.subscribe("/lanelet_map_bin", 1, &BehaviorGen::callbackGetLanelet2, this);
-		sub_lanes = nh.subscribe("/vector_map_info/lane", 1, &BehaviorGen::callbackGetVMLanes,  this);
-		sub_points = nh.subscribe("/vector_map_info/point", 1, &BehaviorGen::callbackGetVMPoints,  this);
-		sub_dt_lanes = nh.subscribe("/vector_map_info/dtlane", 1, &BehaviorGen::callbackGetVMdtLanes,  this);
-		sub_intersect = nh.subscribe("/vector_map_info/cross_road", 1, &BehaviorGen::callbackGetVMIntersections,  this);
-		sup_area = nh.subscribe("/vector_map_info/area", 1, &BehaviorGen::callbackGetVMAreas,  this);
-		sub_lines = nh.subscribe("/vector_map_info/line", 1, &BehaviorGen::callbackGetVMLines,  this);
-		sub_stop_line = nh.subscribe("/vector_map_info/stop_line", 1, &BehaviorGen::callbackGetVMStopLines,  this);
-		sub_signals = nh.subscribe("/vector_map_info/signal", 1, &BehaviorGen::callbackGetVMSignal,  this);
-		sub_vectors = nh.subscribe("/vector_map_info/vector", 1, &BehaviorGen::callbackGetVMVectors,  this);
-		sub_curbs = nh.subscribe("/vector_map_info/curb", 1, &BehaviorGen::callbackGetVMCurbs,  this);
-		sub_edges = nh.subscribe("/vector_map_info/road_edge", 1, &BehaviorGen::callbackGetVMRoadEdges,  this);
-		sub_way_areas = nh.subscribe("/vector_map_info/way_area", 1, &BehaviorGen::callbackGetVMWayAreas,  this);
-		sub_cross_walk = nh.subscribe("/vector_map_info/cross_walk", 1, &BehaviorGen::callbackGetVMCrossWalks,  this);
-		sub_nodes = nh.subscribe("/vector_map_info/node", 1, &BehaviorGen::callbackGetVMNodes,  this);
-	}
+	m_MapHandler.InitMapHandler(nh, "/op_common_params/mapSource",
+			"/op_common_params/mapFileName", "/op_common_params/lanelet2_origin");
 }
 
 BehaviorGen::~BehaviorGen()
@@ -166,7 +131,7 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 	_nh.getParam("/op_common_params/minDistanceToAvoid", m_PlanningParams.minDistanceToAvoid);
 	_nh.getParam("/op_common_params/maxDistanceToAvoid", m_PlanningParams.maxDistanceToAvoid);
 	_nh.getParam("/op_common_params/speedProfileFactor", m_PlanningParams.speedProfileFactor);
-	nh.getParam("/op_common_params/curveSlowDownRatio", m_PlanningParams.curveSlowDownRatio);
+	_nh.getParam("/op_common_params/curveSlowDownRatio", m_PlanningParams.curveSlowDownRatio);
 
 	_nh.getParam("/op_common_params/horizontalSafetyDistance", m_PlanningParams.horizontalSafetyDistancel);
 	_nh.getParam("/op_common_params/verticalSafetyDistance", m_PlanningParams.verticalSafetyDistance);
@@ -191,46 +156,21 @@ void BehaviorGen::UpdatePlanningParams(ros::NodeHandle& _nh)
 
 	m_ControlParams.Steering_Gain = PlannerHNS::PID_CONST(0.07, 0.02, 0.01);
 	m_ControlParams.Velocity_Gain = PlannerHNS::PID_CONST(0.1, 0.005, 0.1);
-	m_ControlParams.min_safe_follow_distance = m_PlanningParams.maxDistanceToAvoid;
-	nh.getParam("/op_common_params/steeringDelay", m_ControlParams.SteeringDelay);
-	nh.getParam("/op_common_params/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
+	m_ControlParams.min_safe_follow_distance = m_PlanningParams.additionalBrakingDistance;
+	_nh.getParam("/op_common_params/steeringDelay", m_ControlParams.SteeringDelay);
+	_nh.getParam("/op_common_params/minPursuiteDistance", m_ControlParams.minPursuiteDistance );
 
 	//Internal ACC parameters
-	nh.getParam("/op_common_params/use_internal_acc", m_BehaviorGenerator.m_bUseInternalACC);
-	nh.getParam("/op_common_params/accelerationPushRatio", m_ControlParams.accelPushRatio);
-	nh.getParam("/op_common_params/brakingPushRatio", m_ControlParams.brakePushRatio);
+	_nh.getParam("/op_common_params/use_internal_acc", m_BehaviorGenerator.m_bUseInternalACC);
+	_nh.getParam("/op_common_params/accelerationPushRatio", m_ControlParams.accelPushRatio);
+	_nh.getParam("/op_common_params/brakingPushRatio", m_ControlParams.brakePushRatio);
 
-	nh.getParam("/op_common_params/additionalBrakingDistance", m_PlanningParams.additionalBrakingDistance );
-	nh.getParam("/op_common_params/goalDiscoveryDistance", m_PlanningParams.goalDiscoveryDistance);
-	nh.getParam("/op_common_params/giveUpDistance", m_PlanningParams.giveUpDistance );
+	_nh.getParam("/op_common_params/additionalBrakingDistance", m_PlanningParams.additionalBrakingDistance );
+	_nh.getParam("/op_common_params/goalDiscoveryDistance", m_PlanningParams.goalDiscoveryDistance);
+	_nh.getParam("/op_common_params/giveUpDistance", m_PlanningParams.giveUpDistance );
 
-	int iSource = 0;
-	_nh.getParam("/op_common_params/mapSource" , iSource);
-	if(iSource == 0)
-		m_MapType = PlannerHNS::MAP_AUTOWARE;
-	else if (iSource == 1)
-		m_MapType = PlannerHNS::MAP_FOLDER;
-	else if(iSource == 2)
-		m_MapType = PlannerHNS::MAP_KML_FILE;
-	else if(iSource == 3)
-	{
-		m_MapType = PlannerHNS::MAP_LANELET_2;
-		std::string str_origin;
-		nh.getParam("/op_common_params/lanelet2_origin" , str_origin);
-		std::vector<std::string> lat_lon_alt = PlannerHNS::MappingHelpers::SplitString(str_origin, ",");
-		if(lat_lon_alt.size() == 3)
-		{
-			m_Map.origin.pos.lat = atof(lat_lon_alt.at(0).c_str());
-			m_Map.origin.pos.lon = atof(lat_lon_alt.at(1).c_str());
-			m_Map.origin.pos.alt = atof(lat_lon_alt.at(2).c_str());
-		}
-	}
-
-	_nh.getParam("/op_common_params/mapFileName" , m_MapPath);
 	_nh.getParam("/op_behavior_selector/evidence_trust_number", m_PlanningParams.nReliableCount);
 	_nh.getParam("/op_behavior_selector/show_driving_path", m_bShowActualDrivingPath);
-
-
 
 	_nh.getParam("/op_common_params/experimentName" , m_ExperimentFolderName);
 	if(m_ExperimentFolderName.size() > 0)
@@ -275,64 +215,20 @@ void BehaviorGen::callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPt
 	bNewCurrentPos = true;
 }
 
-void BehaviorGen::callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg)
-{
-	m_VehicleStatus.speed = msg->twist.linear.x;
-	m_CurrentPos.v = m_VehicleStatus.speed;
-
-	if(fabs(m_CurrentPos.v) > 0.1)
-	{
-		m_VehicleStatus.steer = atan(m_CarInfo.wheel_base * msg->twist.angular.z/m_CurrentPos.v);
-	}
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void BehaviorGen::callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg)
-{
-	m_VehicleStatus.speed = msg->speed/3.6;
-	m_CurrentPos.v = m_VehicleStatus.speed;
-	m_VehicleStatus.steer = msg->angle * m_CarInfo.max_wheel_angle / m_CarInfo.max_steer_value;
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void BehaviorGen::callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg)
-{
-	m_VehicleStatus.speed = msg->twist.twist.linear.x;
-	m_CurrentPos.v = m_VehicleStatus.speed ;
-	if(msg->twist.twist.linear.x != 0)
-	{
-		m_VehicleStatus.steer += atan(m_CarInfo.wheel_base * msg->twist.twist.angular.z/msg->twist.twist.linear.x);
-	}
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-}
-
-void BehaviorGen::callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg)
-{
-	m_VehicleStatus.speed = msg->speed/3.6;
-	m_VehicleStatus.steer = -msg->angle*DEG2RAD;
-	m_CurrentPos.v = m_VehicleStatus.speed;
-	UtilityHNS::UtilityH::GetTickCount(m_VehicleStatus.tStamp);
-	bVehicleStatus = true;
-//	std::cout << "Vehicle Real Status, Speed: " << m_VehicleStatus.speed << ", Steer Angle: " << m_VehicleStatus.steer << ", Steermode: " << msg->steeringmode << ", Org angle: " << msg->angle <<  std::endl;
-}
-
 //----------------------------
 
 //Path Planning Section
 //----------------------------
 void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayConstPtr& msg)
 {
-	if(msg->lanes.size() > 0 && bMap)
+	if(msg->lanes.size() > 0)
 	{
 		m_GlobalPaths.clear();
 		for(unsigned int i = 0 ; i < msg->lanes.size(); i++)
 		{
 			PlannerHNS::ROSHelpers::ConvertFromAutowareLaneToLocalLane(msg->lanes.at(i), m_temp_path);
 
-			if(bMap)
+			if(m_MapHandler.IsMapLoaded())
 			{
 				PlannerHNS::Lane* pPrevValid = 0;
 				for(unsigned int j = 0 ; j < m_temp_path.size(); j++)
@@ -387,7 +283,7 @@ void BehaviorGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayCon
 			{
 				PlannerHNS::PlanningHelpers::FixPathDensity(m_GlobalPaths.at(i), m_PlanningParams.pathDensity);
 				PlannerHNS::PlanningHelpers::SmoothPath(m_GlobalPaths.at(i), 0.4, 0.4, 0.05);
-				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_temp_path);
+				PlannerHNS::PlanningHelpers::CalcAngleAndCost(m_GlobalPaths.at(i));
 				PlannerHNS::PlanningHelpers::GenerateRecommendedSpeed(m_GlobalPaths.at(i), m_CarInfo.max_speed_forward, m_PlanningParams.speedProfileFactor);
 
 #ifdef LOG_LOCAL_PLANNING_DATA
@@ -660,9 +556,11 @@ void BehaviorGen::VisualizeLocalPlanner()
 	pub_ActualSpeedRviz.publish(target_speed);
 
 	visualization_msgs::MarkerArray selected_path;
+
 	std::vector<PlannerHNS::WayPoint> path = m_BehaviorGenerator.m_Path;
 	PlannerHNS::ROSHelpers::TrajectorySelectedToMarkers(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path);
 	//PlannerHNS::ROSHelpers::TrajectorySelectedToCircles(path, 1,0,1, 1,0,1, m_CarInfo.width/2.0+m_PlanningParams.horizontalSafetyDistancel, selected_path, 2);
+
 	pub_SelectedPathRviz.publish(selected_path);
 
 	//To Test Synchronization Problem
@@ -874,36 +772,9 @@ void BehaviorGen::MainLoop()
 
 		ros::spinOnce();
 
-		if(m_MapType == PlannerHNS::MAP_KML_FILE && !bMap)
+		if(!m_MapHandler.IsMapLoaded())
 		{
-			bMap = true;
-			PlannerHNS::KmlMapLoader kml_loader;
-			kml_loader.LoadKML(m_MapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-		}
-		else if (m_MapType == PlannerHNS::MAP_FOLDER && !bMap)
-		{
-			bMap = true;
-			PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
-			vec_loader.LoadFromFile(m_MapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-		}
-		else if (m_MapType == PlannerHNS::MAP_LANELET_2 && !bMap)
-		{
-			bMap = true;
-			PlannerHNS::Lanelet2MapLoader map_loader;
-			map_loader.LoadMap(m_MapPath, m_Map);
-			PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-		}
-		else if (m_MapType == PlannerHNS::MAP_AUTOWARE && !bMap)
-		{
-			if(m_MapRaw.AreMessagesReceived())
-			{
-				bMap = true;
-				PlannerHNS::VectorMapLoader vec_loader(1, m_PlanningParams.enableLaneChange);
-				vec_loader.LoadFromData(m_MapRaw, m_Map);
-				PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-			}
+			m_MapHandler.LoadMap(m_Map, m_PlanningParams.enableLaneChange);
 		}
 
 		if(bNewCurrentPos && m_GlobalPathsToUse.size() > 0)
@@ -914,10 +785,7 @@ void BehaviorGen::MainLoop()
 				x.lightType = m_CurrLightStatus;
 			}
 
-#ifndef DISABLE_CARLA_SPECIAL_CODE //just for carla
-			m_BehaviorGenerator.UpdateAvoidanceParams(m_PlanningParams.enableSwerving, m_PlanningParams.rollOutNumber);
-#endif
-
+			m_BehaviorGenerator.UpdateParameters(m_ControlParams,  m_PlanningParams, m_CarInfo);
 			m_CurrentBehavior = m_BehaviorGenerator.DoOneStep(avg_dt, m_CurrentPos, m_VehicleStatus, m_CurrTrafficLight, m_TrajectoryBestCost, 0 );
 
 			if(m_bShowActualDrivingPath)
@@ -925,7 +793,6 @@ void BehaviorGen::MainLoop()
 				InsertNewActualPathPair();
 			}
 
-			//if(!m_bRequestNewPlanDone && m_BehaviorGenerator.m_bRequestNewGlobalPlan)
 			if(m_BehaviorGenerator.m_bRequestNewGlobalPlan)
 			{
 				if(m_bRequestNewPlanSent == false)
@@ -940,6 +807,23 @@ void BehaviorGen::MainLoop()
 			{
 				m_bRequestNewPlanSent = false;
 			}
+
+			//Increase the number of roll out if the vehicle is stopped behind another vehicle for long time 
+//			if(m_CurrentBehavior.state == PlannerHNS::FOLLOW_STATE)
+//			{
+//				if(m_VehicleStatus.speed > 0.1)
+//				{
+//					UtilityHNS::UtilityH::GetTickCount(m_TimeSinceLastChange);
+//				}
+//				else if(UtilityHNS::UtilityH::GetTimeDiffNow(m_TimeSinceLastChange) > 15)
+//				{
+//					m_ParamsHandler.UpdateRolloutsNumber(10);
+//				}
+//			}
+//			else
+//			{
+//				UtilityHNS::UtilityH::GetTickCount(m_TimeSinceLastChange);
+//			}
 
 
 			SendLocalPlanningTopics();
@@ -956,115 +840,5 @@ void BehaviorGen::MainLoop()
 		loop_rate.sleep();
 	}
 }
-//----------------------------
-
-//Mapping Section
-//----------------------------
-void BehaviorGen::callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg)
-{
-	PlannerHNS::Lanelet2MapLoader map_loader;
-	map_loader.LoadMap(msg, m_Map);
-	PlannerHNS::MappingHelpers::ConvertVelocityToMeterPerSecond(m_Map);
-	bMap = true;
-}
-
-void BehaviorGen::callbackGetVMLanes(const vector_map_msgs::LaneArray& msg)
-{
-	std::cout << "Received Lanes" << endl;
-	if(m_MapRaw.pLanes == nullptr)
-		m_MapRaw.pLanes = new UtilityHNS::AisanLanesFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMPoints(const vector_map_msgs::PointArray& msg)
-{
-	std::cout << "Received Points" << endl;
-	if(m_MapRaw.pPoints  == nullptr)
-		m_MapRaw.pPoints = new UtilityHNS::AisanPointsFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg)
-{
-	std::cout << "Received dtLanes" << endl;
-	if(m_MapRaw.pCenterLines == nullptr)
-		m_MapRaw.pCenterLines = new UtilityHNS::AisanCenterLinesFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMIntersections(const vector_map_msgs::CrossRoadArray& msg)
-{
-	std::cout << "Received CrossRoads" << endl;
-	if(m_MapRaw.pIntersections == nullptr)
-		m_MapRaw.pIntersections = new UtilityHNS::AisanIntersectionFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMAreas(const vector_map_msgs::AreaArray& msg)
-{
-	std::cout << "Received Areas" << endl;
-	if(m_MapRaw.pAreas == nullptr)
-		m_MapRaw.pAreas = new UtilityHNS::AisanAreasFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMLines(const vector_map_msgs::LineArray& msg)
-{
-	std::cout << "Received Lines" << endl;
-	if(m_MapRaw.pLines == nullptr)
-		m_MapRaw.pLines = new UtilityHNS::AisanLinesFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMStopLines(const vector_map_msgs::StopLineArray& msg)
-{
-	std::cout << "Received StopLines" << endl;
-	if(m_MapRaw.pStopLines == nullptr)
-		m_MapRaw.pStopLines = new UtilityHNS::AisanStopLineFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMSignal(const vector_map_msgs::SignalArray& msg)
-{
-	std::cout << "Received Signals" << endl;
-	if(m_MapRaw.pSignals  == nullptr)
-		m_MapRaw.pSignals = new UtilityHNS::AisanSignalFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMVectors(const vector_map_msgs::VectorArray& msg)
-{
-	std::cout << "Received Vectors" << endl;
-	if(m_MapRaw.pVectors  == nullptr)
-		m_MapRaw.pVectors = new UtilityHNS::AisanVectorFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMCurbs(const vector_map_msgs::CurbArray& msg)
-{
-	std::cout << "Received Curbs" << endl;
-	if(m_MapRaw.pCurbs == nullptr)
-		m_MapRaw.pCurbs = new UtilityHNS::AisanCurbFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMRoadEdges(const vector_map_msgs::RoadEdgeArray& msg)
-{
-	std::cout << "Received Edges" << endl;
-	if(m_MapRaw.pRoadedges  == nullptr)
-		m_MapRaw.pRoadedges = new UtilityHNS::AisanRoadEdgeFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg)
-{
-	std::cout << "Received Wayareas" << endl;
-	if(m_MapRaw.pWayAreas  == nullptr)
-		m_MapRaw.pWayAreas = new UtilityHNS::AisanWayareaFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg)
-{
-	std::cout << "Received CrossWalks" << endl;
-	if(m_MapRaw.pCrossWalks == nullptr)
-		m_MapRaw.pCrossWalks = new UtilityHNS::AisanCrossWalkFileReader(msg);
-}
-
-void BehaviorGen::callbackGetVMNodes(const vector_map_msgs::NodeArray& msg)
-{
-	std::cout << "Received Nodes" << endl;
-	if(m_MapRaw.pNodes == nullptr)
-		m_MapRaw.pNodes = new UtilityHNS::AisanNodesFileReader(msg);
-}
-//----------------------------
 
 }

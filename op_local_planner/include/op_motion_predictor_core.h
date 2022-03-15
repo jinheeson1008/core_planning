@@ -18,34 +18,20 @@
 #define OP_MOTION_PREDICTION
 
 #include <ros/ros.h>
-
-#include "vector_map_msgs/PointArray.h"
-#include "vector_map_msgs/LaneArray.h"
-#include "vector_map_msgs/NodeArray.h"
-#include "vector_map_msgs/StopLineArray.h"
-#include "vector_map_msgs/DTLaneArray.h"
-#include "vector_map_msgs/LineArray.h"
-#include "vector_map_msgs/AreaArray.h"
-#include "vector_map_msgs/SignalArray.h"
-#include "vector_map_msgs/StopLine.h"
-#include "vector_map_msgs/VectorArray.h"
-
-#include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PointStamped.h>
-#include <nav_msgs/Odometry.h>
 #include <autoware_msgs/LaneArray.h>
-#include <autoware_can_msgs/CANInfo.h>
-#include <autoware_msgs/VehicleStatus.h>
 #include <autoware_msgs/DetectedObjectArray.h>
 #include <visualization_msgs/MarkerArray.h>
-#include <autoware_lanelet2_msgs/MapBin.h>
 #include "op_planner/PlannerCommonDef.h"
 #include "op_planner/BehaviorPrediction.h"
 #include "op_utility/DataRW.h"
+#include "op_ros_helpers/ROSMapHandler.h"
+#include "op_ros_helpers/ROSVelocityHandler.h"
+#include "op_ros_helpers/op_ParamsHandler.h"
 
 namespace MotionPredictorNS
 {
@@ -57,21 +43,17 @@ protected:
 	bool bNewCurrentPos;
 
 	PlannerHNS::VehicleState m_VehicleStatus;
-	bool bVehicleStatus;
 	bool m_bGoNextStep;
 
 	geometry_msgs::Pose m_OriginPos;
 	PlannerHNS::CAR_BASIC_INFO m_CarInfo;
 	PlannerHNS::ControllerParams m_ControlParams;
 	PlannerHNS::PlanningParams m_PlanningParams;
-	PlannerHNS::MAP_SOURCE_TYPE m_MapType;
-	std::string m_MapPath;
 
 	std::vector<PlannerHNS::DetectedObject> m_TrackedObjects;
 	bool bTrackedObjects;
 
 	PlannerHNS::RoadNetwork m_Map;
-	bool bMap;
 
 	bool m_bEnableCurbObstacles;
 	std::vector<PlannerHNS::DetectedObject> curr_curbs_obstacles;
@@ -118,19 +100,11 @@ protected:
 	// define subscribers.
 	ros::Subscriber sub_tracked_objects;
 	ros::Subscriber sub_current_pose ;
-	ros::Subscriber sub_current_velocity;
-	ros::Subscriber sub_robot_odom;
-	ros::Subscriber sub_vehicle_status;
-	ros::Subscriber sub_can_info;
 	ros::Subscriber sub_StepSignal;
 
 	// Callback function for subscriber.
 	void callbackGetTrackedObjects(const autoware_msgs::DetectedObjectArrayConstPtr& msg);
 	void callbackGetCurrentPose(const geometry_msgs::PoseStampedConstPtr& msg);
-	void callbackGetAutowareStatus(const geometry_msgs::TwistStampedConstPtr& msg);
-	void callbackGetCANInfo(const autoware_can_msgs::CANInfoConstPtr &msg);
-	void callbackGetRobotOdom(const nav_msgs::OdometryConstPtr& msg);
-	void callbackGetVehicleStatus(const autoware_msgs::VehicleStatusConstPtr & msg);
 	void callbackGetStepForwardSignals(const geometry_msgs::TwistStampedConstPtr& msg);
 
 	//Helper functions
@@ -143,42 +117,9 @@ public:
 	virtual ~MotionPrediction();
 	void MainLoop();
 
-	//Mapping Section
-
-	UtilityHNS::MapRaw m_MapRaw;
-	ros::Subscriber sub_bin_map;
-	ros::Subscriber sub_lanes;
-	ros::Subscriber sub_points;
-	ros::Subscriber sub_dt_lanes;
-	ros::Subscriber sub_intersect;
-	ros::Subscriber sup_area;
-	ros::Subscriber sub_lines;
-	ros::Subscriber sub_stop_line;
-	ros::Subscriber sub_signals;
-	ros::Subscriber sub_vectors;
-	ros::Subscriber sub_curbs;
-	ros::Subscriber sub_edges;
-	ros::Subscriber sub_way_areas;
-	ros::Subscriber sub_cross_walk;
-	ros::Subscriber sub_nodes;
-
-
-	void LoadMap();
-	void callbackGetLanelet2(const autoware_lanelet2_msgs::MapBin& msg);
-	void callbackGetVMLanes(const vector_map_msgs::LaneArray& msg);
-	void callbackGetVMPoints(const vector_map_msgs::PointArray& msg);
-	void callbackGetVMdtLanes(const vector_map_msgs::DTLaneArray& msg);
-	void callbackGetVMIntersections(const vector_map_msgs::CrossRoadArray& msg);
-	void callbackGetVMAreas(const vector_map_msgs::AreaArray& msg);
-	void callbackGetVMLines(const vector_map_msgs::LineArray& msg);
-	void callbackGetVMStopLines(const vector_map_msgs::StopLineArray& msg);
-	void callbackGetVMSignal(const vector_map_msgs::SignalArray& msg);
-	void callbackGetVMVectors(const vector_map_msgs::VectorArray& msg);
-	void callbackGetVMCurbs(const vector_map_msgs::CurbArray& msg);
-	void callbackGetVMRoadEdges(const vector_map_msgs::RoadEdgeArray& msg);
-	void callbackGetVMWayAreas(const vector_map_msgs::WayAreaArray& msg);
-	void callbackGetVMCrossWalks(const vector_map_msgs::CrossWalkArray& msg);
-	void callbackGetVMNodes(const vector_map_msgs::NodeArray& msg);
+	PlannerHNS::MapHandler m_MapHandler;
+	PlannerHNS::VelocityHandler m_VelHandler;
+	PlannerHNS::ParamsHandler m_ParamsHandler;
 };
 
 }

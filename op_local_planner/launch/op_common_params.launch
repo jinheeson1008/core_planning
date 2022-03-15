@@ -1,7 +1,7 @@
 <!-- -->
 <launch>
 
-	<arg name="mapSource" 					default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml=2, lanelet2 file=3, kml map file path from runtime manager = 4 -->
+	<arg name="mapSource" 					default="0" /> <!-- Autoware=0, Vector Map Folder=1, kml=2, lanelet2 file=3, kml map file path from runtime manager = 4, OpenDRIVE file = 6 -->
 	<arg name="mapFileName" 				default="" />
 	<arg name="lanelet2_origin"				default="0,0,0," /> <!-- GPS origin for lanelet2 map files, Lat, Long, Alt  -->
 		
@@ -41,8 +41,8 @@
 	<arg name="maxWheelAngle" 				default="0.42" /> <!-- radians -->
 	<arg name="steeringDelay" 				default="0.3" /> <!-- time steering wheel take to turn from zero to max left or right -->
 	<arg name="minPursuiteDistance" 		default="3.0" /> <!-- min distance to forward following target point on the trajectory  -->
-	<arg name="maxAcceleration" 			default="2.0" /> <!-- m/s*s -->
-	<arg name="maxDeceleration" 			default="-2.0" /> <!-- m/s*s -->
+	<arg name="maxAcceleration" 			default="3.0" /> <!-- m/s*s -->
+	<arg name="maxDeceleration" 			default="-3.0" /> <!-- m/s*s -->
 	<arg name="maxVelocity" 				default="10.0" /> <!-- m/s -->
 	<arg name="minVelocity" 				default="0.1" /> <!-- m/s -->
 	<!-- ................................................... -->
@@ -53,13 +53,13 @@
 	<arg name="brakingPushRatio" 			default="1.0" /> <!-- push the velocity to decrease even when the velocity feedback signal from sensing is very small or delayed, contribute to final deceleration. where 1 predefined deceleration value is used-->	
 	<!-- ................................................... -->
 	
-	<arg name="additionalBrakingDistance" 	default="1.0" />
+	<arg name="additionalBrakingDistance" 	default="10.0" />
 	<arg name="goalDiscoveryDistance" 		default="1.0" />
 	
 	<arg name="giveUpDistance" 				default="-1.0" />
 			
 	<arg name="velocitySource"				default="1" /> <!-- read velocities from (0- Odometry, 1- autoware current_velocities, 2- car_info, 3- vehicle status ) "" -->
-	<arg name="vel_odom_topic"				default="/carla/ego_vehicle/odometry" />
+	<arg name="vel_odom_topic"				default="/odometry" />
 	<arg name="vel_curr_topic"				default="/current_velocity" />
 	<arg name="vel_can_topic"				default="/can_info" />
 	<arg name="vehicle_status_topic"		default="/vehicle_status" />
